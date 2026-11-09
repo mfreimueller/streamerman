@@ -1,3 +1,4 @@
+import { some, none } from './build';
 import { DOUBLE, INT, LONG, STRING, cls } from '../lang/types';
 import { makeUniverse } from '../lang/universe';
 import type { Task, Unit } from './types';
@@ -116,6 +117,9 @@ const tasks: Task[] = [
   },
 ];
 
+
+const ORDER = ['findById', 'countByGenre', 'titlesReleasedAfter', 'titlesByDirector', 'countWellRated', 'totalRuntimeOfGenre'];
+tasks.sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
 
 export const movieArchive: Unit = {
   id: 'movies',
