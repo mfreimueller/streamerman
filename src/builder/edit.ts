@@ -48,14 +48,14 @@ function cursorAfter(node: Node, ignoreHoles: Set<number> = new Set()): Cursor {
 export function fill(s: EditorState, targetId: number, node: Node): EditorState {
   const root = replaceById(currentStmt(s).root, targetId, node);
   let cursor = cursorAfter(node);
-  // A finished method reference, or an argument that is followed by another gap, cannot be continued
-  // in a useful way: go to the next gap of the same call right away (saves a tap).
+  // A finished method reference, literal or enum constant that is followed by another gap in the same call
+  // is rarely continued (no `.member()` to add): go to the next gap right away (saves a tap).
   if (cursor.mode === 'append') {
     const parent = parents(root).get(node.id);
     if (parent && (parent.t === 'call' || parent.t === 'scall')) {
       const i = parent.args.indexOf(node);
       const next = i >= 0 ? parent.args.slice(i + 1).flatMap(holesOf)[0] : undefined;
-      if (next && (node.t === 'mref' || i < parent.args.length - 1)) cursor = { nodeId: next.id, mode: 'replace' };
+      if (next && (node.t === 'mref' || node.t === 'lit' || node.t === 'enum')) cursor = { nodeId: next.id, mode: 'replace' };
     }
   }
   return commit(s, root, cursor);

@@ -164,6 +164,32 @@ const tasks: Task[] = [
       { name: 'no plays at all', hidden: true, args: [], data: none0, expected: jmap([]) },
     ],
   },
+  {
+    id: 'topArtist',
+    title: 'Top artist',
+    returnType: cls('Optional', STRING),
+    params: [],
+    description:
+      'Finds the artist with the most plays. Skipped plays do not count. If two or more artists share the highest count, the one whose name comes first in alphabetical order wins.\n\n' +
+      'Return an empty Optional if there is no play that was not skipped.',
+    ruleText: 'Solve it in two steps. What do you need to know first?',
+    steps: [
+      { name: 'playsPerArtist', type: cls('Map', STRING, cls('Long')), description: 'Count the plays per artist (skipped plays do not count). With a TreeMap the artists come out in alphabetical order.' },
+      { type: cls('Optional', STRING), description: 'Pick the artist with the highest count; the first of equal counts wins.' },
+    ],
+    solution: [
+      'plays.stream().filter(p -> !p.isSkipped()).collect(Collectors.groupingBy(Play::artist, TreeMap::new, Collectors.counting()))',
+      'playsPerArtist.entrySet().stream().max(Map.Entry.comparingByValue()).map(Map.Entry::getKey)',
+    ],
+    checks: [
+      { name: 'the whole history (README: Lambda Lovers)', hidden: false, args: [], expected: some('Lambda Lovers') },
+      { name: 'a single play', hidden: false, args: [], data: { plays: [play('S', 'Solo', 'POP', 100)] }, expected: some('Solo') },
+      { name: 'skipped plays do not count', hidden: true, args: [], data: { plays: [play('a', 'Amy', 'POP', 5), play('a', 'Amy', 'POP', 6), play('a', 'Amy', 'POP', 7), play('b', 'Bob', 'POP', 100)] }, expected: some('Bob') },
+      { name: 'a tie: the alphabetically first artist wins', hidden: true, args: [], data: { plays: [play('z', 'Zed', 'POP', 100), play('a', 'Amy', 'POP', 100)] }, expected: some('Amy') },
+      { name: 'only skipped plays', hidden: true, args: [], data: { plays: [play('a', 'Amy', 'POP', 5)] }, expected: none() },
+      { name: 'no plays at all', hidden: true, args: [], data: none0, expected: none() },
+    ],
+  },
 ];
 
 

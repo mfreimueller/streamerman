@@ -1,12 +1,12 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import type { Task, Unit } from '../content/types';
-  import { bindingsOf, signatureOf } from '../content/types';
+  import { bindingsOf, signatureOf, stepsOf } from '../content/types';
+  import { solutionProgram } from '../content/solution';
   import { complete, type CItem } from '../builder/complete';
-  import { clearAll, currentStmt, initState, setCursor, undo, type EditorState } from '../builder/edit';
+  import { clearAll, initState, selectStmt, setCursor, undo, type Cursor, type EditorState } from '../builder/edit';
   import { rootHint } from '../builder/hint';
-  import { typecheck } from '../lang/check';
-  import { parseExpr } from '../lang/parse';
+  import { checkProgram } from '../lang/check';
   import { stmtTokens, toJava } from '../lang/print';
   import { show, type JType } from '../lang/types';
   import { describeProblems, runTask, taskEnv, type RunReport } from '../run';
@@ -19,43 +19,54 @@
 
   let { unit, task }: { unit: Unit; task: Task } = $props();
 
-  const fresh = () => initState([{ type: task.returnType }]);
+  const steps = $derived(stepsOf(task));
+  const fresh = () => initState(stepsOf(task).map((x) => ({ name: x.name, type: x.type })));
   let st = $state.raw<EditorState>(fresh());
   let report = $state.raw<RunReport | null>(null);
   let collapsed = $state(false);
   let chip = $state<string | null>(null);
   let reportEl = $state<HTMLElement>();
 
+  const NO_CURSOR: Cursor = { nodeId: -1, mode: 'append' };
   const env = $derived(taskEnv(unit, task));
-  const stmt = $derived(currentStmt(st));
-  const res = $derived(typecheck(stmt, env, unit.universe));
+  const results = $derived(checkProgram(st.program, env, unit.universe));
+  const res = $derived(results[st.stmtIndex]);
   const comp = $derived(
-    complete(st, res, { u: unit.universe, forbidden: task.forbidden, stringSuggestions: unit.suggestions }),
+    complete(st, res, { u: unit.universe, forbidden: task.forbidden, stringSuggestions: unit.suggestions, constructors: task.constructors }),
   );
-  const problems = $derived(describeProblems(res));
-  const hint = $derived(rootHint(stmt, res, unit.universe, task.forbidden));
-  const tokens = $derived(
-    stmtTokens(stmt, {
-      caretAfter: st.cursor.mode === 'append' && !st.cursor.selected ? st.cursor.nodeId : undefined,
+  const notes = $derived(
+    results.flatMap((r, i) => {
+      const label = results.length > 1 ? `Step ${i + 1}: ` : '';
+      const h = rootHint(st.program.stmts[i], r, unit.universe, task.forbidden);
+      if (h) return [{ hint: true, text: label + h }];
+      return describeProblems(r).map((m) => ({ hint: false, text: label + m }));
     }),
   );
+  const problems = $derived(notes.map((n) => n.text));
   // Mismatches with the expected type are only shown once the code is complete and not being extended.
-  const errorMap = $derived(
-    new Map(
-      res.errors
-        .filter((e) => {
-          if (!res.info.get(e.id)?.mismatch) return true;
-          if (e.id === stmt.root.id) return false;
-          return !res.incomplete && !(st.cursor.nodeId === e.id && st.cursor.mode === 'append' && !st.cursor.selected);
-        })
-        .map((e) => [e.id, e.message]),
-    ),
+  const cards = $derived(
+    st.program.stmts.map((s, i) => {
+      const r = results[i];
+      const active = i === st.stmtIndex;
+      const c = st.cursor;
+      return {
+        stmt: s,
+        tokens: stmtTokens(s, { caretAfter: active && c.mode === 'append' && !c.selected ? c.nodeId : undefined }),
+        errors: new Map(
+          r.errors
+            .filter((e) => {
+              if (!r.info.get(e.id)?.mismatch) return true;
+              if (e.id === s.root.id) return false;
+              return !r.incomplete && !(active && c.nodeId === e.id && c.mode === 'append' && !c.selected);
+            })
+            .map((e) => [e.id, e.message]),
+        ),
+      };
+    }),
   );
   const index = $derived(unit.tasks.findIndex((t) => t.id === task.id));
   const nextTaskId = $derived(unit.tasks[index + 1]?.id);
-  const solution = $derived(
-    toJava({ type: task.returnType, root: parseExpr(task.solution, unit.universe.kindOf) }),
-  );
+  const solution = $derived(solutionProgram(unit, task).stmts.map((x) => toJava(x)).join('\n'));
   const bindings = $derived(
     [
       ...bindingsOf(unit, task).map((b) => ({ name: b.name, type: b.type, text: b.description ?? 'context value', value: b.value as unknown })),
@@ -77,7 +88,14 @@
     st = item.kind === 'literal' ? item.apply(st, value ?? '') : item.apply(st);
     report = null;
   }
-  const select = (id: number) => ((st = setCursor(st, id, true)), (collapsed = false));
+  const select = (id: number, step = st.stmtIndex) => {
+    st = setCursor(selectStmt(st, step), id, true);
+    collapsed = false;
+  };
+  const activate = (i: number) => {
+    st = selectStmt(st, i);
+    collapsed = false;
+  };
 
   async function run() {
     report = runTask(unit, task, st.program);
@@ -125,15 +143,26 @@
       </div>
     {/if}
 
-    <CodeView {tokens} cursor={st.cursor} errors={errorMap} onselect={select} />
+    {#if cards.length === 1}
+      <CodeView tokens={cards[0].tokens} cursor={st.cursor} errors={cards[0].errors} onselect={(id) => select(id)} />
+    {:else}
+      {#each cards as c, i (i)}
+        <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+        <div class="step" class:active={i === st.stmtIndex} onclick={() => i !== st.stmtIndex && activate(i)}>
+          <button type="button" class="stephead" onclick={(e) => { e.stopPropagation(); activate(i); }}>
+            <strong>Step {i + 1} of {cards.length}</strong>
+            <span class="muted">{steps[i].description}</span>
+          </button>
+          <CodeView tokens={c.tokens} cursor={i === st.stmtIndex ? st.cursor : NO_CURSOR} errors={c.errors} onselect={(id) => select(id, i)} />
+        </div>
+      {/each}
+    {/if}
 
-    {#if hint}
-      <p class="why hint">{hint}</p>
-    {:else if problems.length}
-      <p class="why">{problems.join(' · ')}</p>
+    {#each notes as n (n.text)}
+      <p class="why" class:hint={n.hint}>{n.text}</p>
     {:else}
       <p class="why okmsg">Looks complete. Press Run.</p>
-    {/if}
+    {/each}
 
     <div bind:this={reportEl}>
       {#if report}
@@ -177,6 +206,10 @@
   .chip.active { border-color: var(--accent); background: var(--sel); }
   .chipinfo { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; margin: 4px 0; font-size: 0.9rem; }
   .def { display: block; font-size: 12.5px; margin: 4px 0; overflow-wrap: anywhere; }
+  .step { border: 1px solid var(--border); border-radius: 12px; padding: 6px 8px 0; margin: 10px 0; background: var(--card); }
+  .step.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .stephead { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; min-height: 40px; background: none; border: 0; padding: 4px 2px; text-align: left; cursor: pointer; font-size: 0.85rem; }
+  .step :global(.codeview) { margin: 4px 0 8px; }
   .why { margin: 4px 2px; font-size: 0.85rem; color: var(--err); }
   .why.hint { color: var(--muted); }
   .slim { display: flex; gap: 10px; align-items: center; min-height: 48px; padding: 0 12px; border: 0; border-top: 1px solid var(--border); background: var(--card); cursor: pointer; text-align: left; }

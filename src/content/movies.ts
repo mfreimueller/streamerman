@@ -120,6 +120,57 @@ const tasks: Task[] = [
       { name: 'no movies at all', hidden: true, args: [7.0, 0], data: { movies: [] }, expected: 0 },
     ],
   },
+  {
+    id: 'titlesOfMostFrequentDirector',
+    title: 'Titles of the most frequent director',
+    returnType: cls('List', STRING),
+    params: [],
+    description:
+      'Returns all movie titles by the director that directed the most movies.\n\n' +
+      'If several directors are tied, the one whose first movie comes first in the data wins. Without movies the result is an empty list.',
+    ruleText: 'Split it in two steps: first find the director, then filter the movies.',
+    steps: [
+      { name: 'topDirector', type: STRING, description: 'Find the director with the most movies (an empty String if there are no movies).' },
+      { type: cls('List', STRING), description: 'Return the titles of the movies of that director.' },
+    ],
+    solution: [
+      'movies.stream().collect(Collectors.groupingBy(Movie::director, LinkedHashMap::new, Collectors.counting())).entrySet().stream().max(Map.Entry.comparingByValue()).map(Map.Entry::getKey).orElse("")',
+      'movies.stream().filter(m -> m.director().equals(topDirector)).map(Movie::title).toList()',
+    ],
+    checks: [
+      { name: 'the archive (David Lynch directed 10 movies)', hidden: false, args: [], expected: LYNCH_TITLES },
+      { name: 'two directors', hidden: false, args: [], data: { movies: [MOVIES[0], MOVIES[10], MOVIES[11], MOVIES[12], MOVIES[1]] }, expected: ['Eraserhead', 'The Elephant Man'] },
+      { name: 'a tie: the director who comes first in the data wins', hidden: true, args: [], data: { movies: [mv(1, 'B1', 2000, ['DRAMA'], 7, 1, 'Y', 90, 'X'), mv(2, 'A1', 2001, ['DRAMA'], 7, 1, 'X', 90, 'X'), mv(3, 'B2', 2002, ['DRAMA'], 7, 1, 'Y', 90, 'X'), mv(4, 'A2', 2003, ['DRAMA'], 7, 1, 'X', 90, 'X')] }, expected: ['B1', 'B2'] },
+      { name: 'a single movie', hidden: true, args: [], data: { movies: [MOVIES[3]] }, expected: ['Blue Velvet'] },
+      { name: 'no movies at all', hidden: true, args: [], data: { movies: [] }, expected: [] },
+    ],
+  },
+  {
+    id: 'moviesOfGenreWithHighestAverageRating',
+    title: 'Movies of the best rated genre',
+    returnType: cls('List', cls('Movie')),
+    params: [],
+    description:
+      'Returns all movies that belong to the genre whose movies have the highest average rating.\n\n' +
+      'Example: if Drama has the highest average rating, return all movies of that genre. A movie counts for every genre it has. ' +
+      'If several genres have the same average, the one that appears first in the data wins. You may assume there is at least one movie.',
+    ruleText: 'Split it in two steps: first find the genre, then filter the movies.',
+    steps: [
+      { name: 'bestGenre', type: cls('Genre'), description: 'Find the genre with the highest average rating.' },
+      { type: cls('List', cls('Movie')), description: 'Return the movies of that genre.' },
+    ],
+    solution: [
+      'movies.stream().flatMap(m -> m.genres().stream()).distinct().max(Comparator.comparingDouble((Genre g) -> movies.stream().filter(m -> m.genres().contains(g)).mapToDouble(Movie::rating).average().orElse(0.0))).orElseThrow()',
+      'movies.stream().filter(m -> m.genres().contains(bestGenre)).toList()',
+    ],
+    checks: [
+      { name: 'the archive (README: Drama has the best average, 7.73)', hidden: false, args: [], expected: [2, 5, 6, 8, 9, 12, 13].map((i) => MOVIES[i - 1]) },
+      { name: 'one movie with a great rating wins', hidden: false, args: [], data: { movies: HI }, expected: [HI[0]] },
+      { name: 'the average counts, not the sum', hidden: true, args: [], data: { movies: AVG }, expected: [AVG[3]] },
+      { name: 'a tie: the genre that appears first wins', hidden: true, args: [], data: { movies: TIE }, expected: [TIE[0]] },
+      { name: 'a movie counts for all its genres', hidden: true, args: [], data: { movies: MULTI }, expected: [MULTI[0]] },
+    ],
+  },
 ];
 
 

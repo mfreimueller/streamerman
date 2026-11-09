@@ -1,12 +1,14 @@
 <script lang="ts">
   import type { RunReport } from '../run';
   import { hrefTask, hrefUnit } from '../lib/router.svelte';
+  import StepView from './StepView.svelte';
 
   let {
     report, unitId, nextTaskId, solution,
   }: { report: RunReport; unitId: string; nextTaskId?: string; solution: string } = $props();
 
   let showSolution = $state(false);
+  let showSteps = $state(false);
   const shown = $derived(report.checks.filter((c) => !c.hidden || !c.passed));
   const passedCount = $derived(report.checks.filter((c) => c.passed).length);
 </script>
@@ -44,6 +46,7 @@
           <code class="code call">{c.call}</code>
           {#if !c.passed}
             <div class="cmp code">
+              {#each c.steps as sv (sv.name)}<div><span class="k">{sv.name}</span> = {sv.text}</div>{/each}
               <div><span class="k">expected</span> {c.expectedText}</div>
               {#if c.error}
                 <div class="exc"><span class="k">threw</span> {c.error}</div>
@@ -55,6 +58,14 @@
         </li>
       {/each}
     </ul>
+    {#if report.trace}
+      {#if !report.trace.passed || showSteps}
+        <StepView trace={report.trace} />
+      {/if}
+      {#if report.trace.passed}
+        <button type="button" class="btn" onclick={() => (showSteps = !showSteps)}>{showSteps ? 'Hide' : 'Show'} steps</button>
+      {/if}
+    {/if}
   {/if}
 </section>
 
