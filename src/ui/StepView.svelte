@@ -5,6 +5,7 @@
 
   const LIMIT = 6;
   let all = $state<Record<string, boolean>>({});
+  let open = $state<Record<string, boolean>>({});
 </script>
 
 <section class="steps">
@@ -28,7 +29,15 @@
           </div>
           {#if op.values.length}
             <div class="vals">
-              {#each all[k] ? op.values : op.values.slice(0, LIMIT) as v, vi (vi)}<code class="v" title={v}>{v.length > 90 ? v.slice(0, 90) + '…' : v}</code>{/each}
+              {#each all[k] ? op.values : op.values.slice(0, LIMIT) as v, vi (vi)}
+                {#if op.full[vi] !== v}
+                  <button type="button" class="v chip" class:open={open[`${k}:${vi}`]} aria-expanded={!!open[`${k}:${vi}`]} onclick={() => (open[`${k}:${vi}`] = !open[`${k}:${vi}`])}>
+                    {open[`${k}:${vi}`] ? op.full[vi] : v}
+                  </button>
+                {:else}
+                  <code class="v">{v}</code>
+                {/if}
+              {/each}
               {#if op.values.length > LIMIT}
                 <button type="button" class="more" onclick={() => (all[k] = !all[k])}>
                   {all[k] ? 'show less' : `show all ${op.values.length}`}
@@ -53,5 +62,7 @@
   .meta { font-size: 0.8rem; color: var(--muted); }
   .vals { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; max-height: 40vh; overflow-y: auto; }
   .v { font-size: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; overflow-wrap: anywhere; }
+  button.chip { font: 12px var(--font-code); color: inherit; cursor: pointer; text-align: left; min-height: 32px; }
+  button.chip.open { flex-basis: 100%; overflow-wrap: anywhere; }
   .more { min-height: 32px; padding: 0 10px; border-radius: 16px; border: 1px solid var(--border); background: var(--card); cursor: pointer; }
 </style>

@@ -159,4 +159,32 @@ describe('completions for collectors, comparators and references', () => {
     expect(row('Collectors.toList()').detail).toBe('List<Play>');
     expect(row('Collectors.mapping(mapper, downstream)').detail).toBe('R');
   });
+
+  it('orders groups inside lambdas: the lambda owner first when the body fits, else the innermost', () => {
+    const f = new B(cls('List', STRING));
+    f.pick('movies').pick('stream()').pick('filter(predicate)').pick('m -> …').pick('m').pick('year()').pick('>').pick('year');
+    expect(f.comp().groups[0].title.startsWith('on movies.stream().filter(…)')).toBe(true);
+    const m = new B(cls('List', STRING));
+    m.pick('movies').pick('stream()').pick('map(mapper)').pick('m -> …').pick('m').pick('title()');
+    expect(m.comp().groups[0].title.startsWith('on m.title() · String')).toBe(true);
+    expect(m.comp().groups[1].title.startsWith('on movies.stream().map(…)')).toBe(true);
+    // body not complete yet: innermost first
+    const g = new B(cls('List', STRING));
+    g.pick('movies').pick('stream()').pick('filter(predicate)').pick('m -> …').pick('m');
+    expect(g.comp().groups[0].title.startsWith('on m · Movie')).toBe(true);
+  });
+
+  it('advances to the next gap after a complete argument of fixed type, not after variables or unknown types', () => {
+    const b = mk(cls('List', cls('List', STRING)));
+    b.pick('plays').pick('stream()').pick('map(mapper)').pick('p -> …').pick('List.of(e1, e2, e3)');
+    b.pick('p');
+    expect(b.comp().title).toMatch(/^Continue after p/); // a variable: the student continues with a member
+    b.pick('artist()');
+    expect(b.comp().title).toMatch(/^Continue after p.artist\(\)/); // expected type unknown for the first element
+    b.pick('→ next gap');
+    expect(b.comp().title).toBe('Expected: String'); // known now
+    b.pick('p').pick('title()');
+    expect(b.comp().title).toBe('Expected: String'); // advanced to the third gap
+    expect(b.code()).toBe('plays.stream().map(p -> List.of(p.artist(), p.title(), …))');
+  });
 });

@@ -4,7 +4,7 @@ import { checkProgram, type CheckResult, type Env } from './lang/check';
 import { evaluate } from './lang/eval';
 import { bindingsOf, type Check, type Task, type Unit } from './content/types';
 import { Tracer } from './engine/trace';
-import { JavaException, isEnum, javaDouble, jEquals, toDisplay } from './engine/values';
+import { JavaException, isEnum, isRecord, javaDouble, jEquals, toDisplay } from './engine/values';
 import { toJavaOp } from './lang/print';
 import { DOUBLE, INT, show, typeArg, type JType } from './lang/types';
 
@@ -35,7 +35,10 @@ export interface OpTrace {
   kind: 'stream' | 'value';
   /** Number of elements that came out (streams). */
   count: number;
+  /** Compact form of each element (records: `Movie#1 Eraserhead`). */
   values: string[];
+  /** Full toString of each element. */
+  full: string[];
   /** Elements the source has (only for the source of the chain). */
   total?: number;
   /** Number of elements that went in (streams after the source). */
@@ -80,6 +83,16 @@ export function describeProgram(rs: CheckResult[]): string[] {
   return rs.flatMap((r, i) => describeProblems(r).map((m) => (rs.length > 1 ? `Step ${i + 1}: ${m}` : m)));
 }
 
+/** Short form of a record for the step view: `Movie#1 Eraserhead`, `Play Segfault Serenade`. */
+export function compactValue(v: unknown, t: JType, unit: Unit): string {
+  if (!isRecord(v)) return toDisplay(v, t, unit.universe);
+  const def = unit.universe.records[v.$rec];
+  if (!def) return toDisplay(v, t, unit.universe);
+  const idf = def.fields.find((f) => f.name === 'id' || f.name === 'code');
+  const strf = def.fields.find((f) => f.type.k === 'cls' && f.type.n === 'String' && f !== idf);
+  return `${v.$rec}${idf ? `#${String(v[idf.name])}` : ''}${strf ? ` ${String(v[strf.name])}` : ''}`;
+}
+
 function elementType(t: JType): JType {
   if (t.k === 'cls' && t.n === 'IntStream') return INT;
   if (t.k === 'cls' && t.n === 'DoubleStream') return DOUBLE;
@@ -98,11 +111,11 @@ function buildTrace(tr: Tracer, res: CheckResult, unit: Unit, stepName?: string)
       const et = elementType(ty);
       op = {
         label: toJavaOp(rec.call), kind: 'stream', count: rec.out.length,
-        values: rec.out.map((x) => toDisplay(x, et, unit.universe)), total: rec.total,
+        values: rec.out.map((x) => compactValue(x, et, unit)), full: rec.out.map((x) => toDisplay(x, et, unit.universe)), total: rec.total,
         inCount: prev && prev.kind === 'stream' ? prev.count : undefined,
       };
     } else {
-      op = { label: toJavaOp(rec.call), kind: 'value', count: 0, values: [], text: toDisplay(rec.value, ty, unit.universe) };
+      op = { label: toJavaOp(rec.call), kind: 'value', count: 0, values: [], full: [], text: toDisplay(rec.value, ty, unit.universe) };
     }
     ops.push(op);
     prev = op;

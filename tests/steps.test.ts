@@ -103,6 +103,8 @@ describe('step view (trace)', () => {
     expect(ops[1]).toMatchObject({ inCount: 10, count: 2 });
     expect(ops[2]).toMatchObject({ inCount: 2, count: 2 });
     expect(ops[3].values).toEqual(['"Mulholland Drive"', '"Inland Empire"']);
+    expect(ops[0].values[0]).toBe('Movie#1 Eraserhead');
+    expect(ops[0].full[0]).toContain('Movie[id=1, title=Eraserhead');
     expect(ops[4].kind).toBe('value');
     expect(ops[4].text).toBe('[Mulholland Drive, Inland Empire]');
   });

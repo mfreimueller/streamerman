@@ -1,6 +1,6 @@
 // Completion catalogue: what may be put at the cursor.
 import {
-  bin, call, children, enumConst, find, hole, lambda, lit, mref, name, parents, replaceById, scall, un,
+  bin, call, children, enumConst, find, hole, holesOf, lambda, lit, mref, name, parents, replaceById, scall, un,
   type BinOp, type LitType, type Node,
 } from '../lang/ast';
 import { typecheck, type CheckResult, type Env } from '../lang/check';
@@ -90,6 +90,7 @@ export function complete(state: EditorState, res: CheckResult, ctx: CompleteCtx)
   const node = find(stmt.root, state.cursor.nodeId);
   const groups: Group[] = [];
   if (!node) return { title: '', expected: null, groups };
+  const baseEnv = res.info.get(stmt.root.id)?.env ?? new Map();
 
   const nextGap = firstHoleOtherThan(state, node.t === 'hole' ? node.id : -1);
   if (nextGap !== undefined && !(node.t === 'hole' && res.holes.length === 1)) {
@@ -116,7 +117,7 @@ export function complete(state: EditorState, res: CheckResult, ctx: CompleteCtx)
     const E = ni?.expected ?? ANY;
     const env = ni?.env ?? new Map();
     groups.push(...replaceGroups(state, res, ctx, node.id, E, env));
-    return { title: isAny(E) ? 'Pick a value' : `Expected: ${show(E)}`, expected: E, groups };
+    return { title: isAny(E) ? 'Pick a value' : `Expected: ${show(E)}`, expected: E, groups: advancing(groups, ctx.u, baseEnv) };
   }
 
   const short = toJavaShort(node);
@@ -134,7 +135,7 @@ export function complete(state: EditorState, res: CheckResult, ctx: CompleteCtx)
   }
 
   groups.push(...appendGroups(state, res, ctx, node));
-  return { title: `${state.cursor.selected ? 'Selected' : 'Continue after'} ${short}`, expected: null, groups };
+  return { title: `${state.cursor.selected ? 'Selected' : 'Continue after'} ${short}`, expected: null, groups: advancing(groups, ctx.u, baseEnv) };
 }
 
 // ---- replace mode ----------------------------------------------------------
@@ -378,8 +379,8 @@ function appendGroups(state: EditorState, res: CheckResult, ctx: CompleteCtx, x:
   const { u } = ctx;
   const stmt = currentStmt(state);
   const rootEnv = res.info.get(stmt.root.id)!.env;
-  const groups: Group[] = [];
   const targets = spine(stmt.root, x).reverse(); // outermost first
+  const built: { t: Node; group: Group }[] = [];
 
   for (const t of targets) {
     const ni = res.info.get(t.id);
@@ -414,9 +415,9 @@ function appendGroups(state: EditorState, res: CheckResult, ctx: CompleteCtx, x:
       });
     }
 
-    if (items.length) groups.push({ title: `on ${toJavaShort(t)} · ${show(ty)}`, items });
+    if (items.length) built.push({ t, group: { title: `on ${toJavaShort(t)} · ${show(ty)}`, items } });
   }
-  return groups;
+  return orderGroups(built, targets, res);
 }
 
 /** Would wrapping `t` in `t op _` type-check? Returns the type of the new expression if so. */
@@ -454,4 +455,60 @@ function operandOk(ty: JType, op: BinOp, u: Universe): boolean {
   }
   if (op === '+') return isNumeric(ty) || (ty.k === 'cls' && ty.n === 'String');
   return isNumeric(ty);
+}
+
+/**
+ * Inside a lambda the group of what was just built comes first. Exception: when the body is complete and its type
+ * already fits a fixed return type of the lambda (boolean for a Predicate, int for ToIntFunction), the next useful
+ * step is on the call that owns the lambda (e.g. `.count()` after `filter(m -> m.year() > year)`).
+ */
+function orderGroups(built: { t: Node; group: Group }[], targets: Node[], res: CheckResult): Group[] {
+  let li = -1;
+  targets.forEach((t, i) => { if (t.t === 'lambda') li = i; });
+  if (li < 0) return built.map((b) => b.group); // no lambda: outermost first (the stream chain)
+  const lam = targets[li] as Extract<Node, { t: 'lambda' }>;
+  const outerIds = new Set(targets.slice(0, li + 1).map((t) => t.id));
+  const outer = built.filter((b) => outerIds.has(b.t.id)).reverse();
+  const inner = built.filter((b) => !outerIds.has(b.t.id)).reverse();
+  const exp = res.info.get(lam.id)?.expected;
+  const shape = exp ? fnShape(exp) : null;
+  const bodyType = res.info.get(lam.body.id)?.type;
+  const fits = !!shape && !!bodyType && holesOf(lam.body).length === 0 && !isAny(shape.ret) &&
+    !(shape.ret.k === 'prim' && shape.ret.n === 'void') && assignable(bodyType, shape.ret);
+  return (fits ? [...outer, ...inner] : [...inner, ...outer]).map((b) => b.group);
+}
+
+/**
+ * After an argument is complete and fits a fixed parameter type, go on with the next gap of the same call.
+ * Not for a lone variable or a lambda (the student may want to continue the chain) nor when the parameter type is unknown.
+ */
+export function autoAdvance(s: EditorState, u: Universe, env: Env): EditorState {
+  const c = s.cursor;
+  if (c.mode !== 'append' || c.selected) return s;
+  const stmt = currentStmt(s);
+  const node = find(stmt.root, c.nodeId);
+  if (!node || node.t === 'name' || node.t === 'lambda' || node.t === 'hole') return s;
+  const par = parents(stmt.root).get(node.id);
+  if (!par || (par.t !== 'call' && par.t !== 'scall')) return s;
+  const i = par.args.indexOf(node);
+  const next = i >= 0 ? par.args.slice(i + 1).flatMap(holesOf)[0] : undefined;
+  if (!next) return s;
+  const ni = typecheck(stmt, env, u).info.get(node.id);
+  if (!ni || isAny(ni.expected) || isAny(ni.type) || !assignable(ni.type, ni.expected)) return s;
+  return { ...s, cursor: { nodeId: next.id, mode: 'replace' } };
+}
+
+function advancing(groups: Group[], u: Universe, env: Env): Group[] {
+  return groups.map((g) =>
+    g.title === 'Navigate' || g.title === 'Edit'
+      ? g
+      : {
+          ...g,
+          items: g.items.map((it): CItem =>
+            it.kind === 'literal'
+              ? { ...it, apply: (s: EditorState, v: string) => autoAdvance(it.apply(s, v), u, env) }
+              : { ...it, apply: (s: EditorState) => autoAdvance(it.apply(s), u, env) },
+          ),
+        },
+  );
 }
