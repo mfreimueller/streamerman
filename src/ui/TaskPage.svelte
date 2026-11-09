@@ -4,14 +4,14 @@
   import { bindingsOf, signatureOf, stepsOf } from '../content/types';
   import { solutionProgram } from '../content/solution';
   import { complete, type CItem } from '../builder/complete';
-  import { clearAll, initState, selectStmt, setCursor, undo, type Cursor, type EditorState } from '../builder/edit';
+  import { clearAll, initState, restoreState, selectStmt, setCursor, undo, type Cursor, type EditorState } from '../builder/edit';
   import { rootHint } from '../builder/hint';
   import { checkProgram } from '../lang/check';
   import { stmtTokens, toJava } from '../lang/print';
   import { show, type JType } from '../lang/types';
   import { describeProblems, runTask, taskEnv, type RunReport } from '../run';
   import { hrefUnit } from '../lib/router.svelte';
-  import { markSolved } from '../lib/progress.svelte';
+  import { loadAttempt, markSolved, saveAttempt } from '../lib/progress.svelte';
   import CodeView from './CodeView.svelte';
   import CompletionPanel from './CompletionPanel.svelte';
   import CheckReport from './CheckReport.svelte';
@@ -21,7 +21,11 @@
 
   const steps = $derived(stepsOf(task));
   const fresh = () => initState(stepsOf(task).map((x) => ({ name: x.name, type: x.type })));
-  let st = $state.raw<EditorState>(fresh());
+  const initial = () => {
+    const saved = loadAttempt(unit.id, task);
+    return saved ? restoreState(saved) : fresh();
+  };
+  let st = $state.raw<EditorState>(initial());
   let report = $state.raw<RunReport | null>(null);
   let collapsed = $state(false);
   let chip = $state<string | null>(null);
@@ -97,12 +101,18 @@
     collapsed = false;
   };
 
+  // keep the last attempt of every task (all steps)
+  $effect(() => {
+    saveAttempt(unit.id, task, st.program);
+  });
+
   async function run() {
     report = runTask(unit, task, st.program);
     collapsed = true;
     if (report.allPassed) markSolved(unit.id, task.id);
     await tick();
-    reportEl?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    reportEl?.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
   }
 </script>
 

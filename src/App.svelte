@@ -8,6 +8,12 @@
   const route = $derived(nav.route);
   const unit = $derived(route.name === 'unit' || route.name === 'task' ? unitById(route.unitId) : undefined);
   const task = $derived(route.name === 'task' && unit ? unit.tasks.find((t) => t.id === route.taskId) : undefined);
+
+  $effect(() => {
+    const base = 'Streamerman';
+    document.title =
+      task && unit ? `${task.title} - ${unit.title} - ${base}` : unit && route.name === 'unit' ? `${unit.title} - ${base}` : route.name === 'notfound' ? `Not found - ${base}` : base;
+  });
 </script>
 
 {#if route.name === 'home'}

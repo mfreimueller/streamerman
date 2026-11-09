@@ -30,6 +30,7 @@
               class:cur={t.cls === 'hole' && cursor.nodeId === id}
               class:err={errors.has(id)}
               title={errors.get(id)}
+              aria-label={t.cls === 'hole' ? 'gap' : undefined}
               role="button"
               tabindex="0"
               onclick={() => onselect(id)}

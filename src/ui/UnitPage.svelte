@@ -2,7 +2,7 @@
   import type { Unit } from '../content/types';
   import { signatureOf } from '../content/types';
   import { hrefHome, hrefTask } from '../lib/router.svelte';
-  import { isSolved } from '../lib/progress.svelte';
+  import { hasAttempt, isSolved } from '../lib/progress.svelte';
   import { show } from '../lang/types';
   import DataTable from './DataTable.svelte';
 
@@ -28,7 +28,13 @@
       <div class="row">
         <strong>{t.title}</strong>
         <span class="spacer"></span>
-        <span aria-label={isSolved(unit.id, t.id) ? 'solved' : 'open'}>{isSolved(unit.id, t.id) ? '✅' : '○'}</span>
+        {#if isSolved(unit.id, t.id)}
+          <span role="img" aria-label="solved">✅</span>
+        {:else if hasAttempt(unit.id, t.id)}
+          <span class="badge" role="img" aria-label="started">in progress</span>
+        {:else}
+          <span role="img" aria-label="not started">○</span>
+        {/if}
       </div>
       <code class="code muted" style="font-size:0.8rem">{signatureOf(t)}</code>
     </a>

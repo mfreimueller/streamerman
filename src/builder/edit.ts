@@ -101,3 +101,9 @@ export function selectStmt(s: EditorState, index: number): EditorState {
   if (!st || index === s.stmtIndex) return s;
   return { ...s, stmtIndex: index, cursor: cursorAfter(st.root) };
 }
+
+/** Editor state for a restored program: the first step that still has a gap is active. */
+export function restoreState(program: Program): EditorState {
+  const i = Math.max(0, program.stmts.findIndex((st) => holesOf(st.root).length > 0));
+  return { program, stmtIndex: i, cursor: cursorAfter(program.stmts[i].root), history: [] };
+}
