@@ -334,6 +334,7 @@ function appendGroups(state: EditorState, res: CheckResult, ctx: CompleteCtx, x:
 function tryOp(
   stmt: ReturnType<typeof currentStmt>, env: Env, u: Universe, base: CheckResult, t: Node, op: BinOp,
 ): JType | null {
+  if (!operandOk(base.info.get(t.id)?.type ?? ANY, op, u)) return null;
   const placeholder = hole();
   const wrapper = bin(op, t, placeholder);
   const root = replaceById(stmt.root, t.id, wrapper);
@@ -353,4 +354,15 @@ function tryOp(
     if (r.info.get(p.id)?.error && !base.info.get(p.id)?.error) return null;
   }
   return mine.type;
+}
+
+/** Can a value of this type be the left operand of `op`? (Independent of earlier errors.) */
+function operandOk(ty: JType, op: BinOp, u: Universe): boolean {
+  if (isAny(ty)) return false;
+  if (op === '&&' || op === '||') return isBoolean(ty);
+  if (op === '==' || op === '!=') {
+    return isNumeric(ty) || isBoolean(ty) || (ty.k === 'cls' && (ty.n === 'String' || !!u.enums[ty.n] || !!u.records[ty.n]));
+  }
+  if (op === '+') return isNumeric(ty) || (ty.k === 'cls' && ty.n === 'String');
+  return isNumeric(ty);
 }

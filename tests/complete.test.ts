@@ -171,4 +171,13 @@ describe('completions', () => {
     d.pick('year').pick('>').pick('year');
     expect(rootHint(currentStmt(d.s), d.res(), U)).toBeNull();
   });
+
+  it('offers no operators on a Stream target even when the root already has an error', () => {
+    const b = new B();
+    b.pick('movies').pick('stream()').pick('filter(predicate)').pick('m -> …').pick('m').pick('year()').pick('>').pick('year');
+    const g = b.comp().groups.find((x) => x.title.startsWith('on movies.stream().filter(…)'))!;
+    const labels = g.items.map((i) => i.label);
+    expect(labels).toContain('map(mapper)');
+    for (const op of ['&&', '||', '+', '-', '*', '/', '%', '<', '<=', '>', '>=', '==', '!=']) expect(labels).not.toContain(op);
+  });
 });
