@@ -28,7 +28,7 @@
           </div>
           {#if op.values.length}
             <div class="vals">
-              {#each all[k] ? op.values : op.values.slice(0, LIMIT) as v, vi (vi)}<code class="v">{v}</code>{/each}
+              {#each all[k] ? op.values : op.values.slice(0, LIMIT) as v, vi (vi)}<code class="v" title={v}>{v.length > 90 ? v.slice(0, 90) + '…' : v}</code>{/each}
               {#if op.values.length > LIMIT}
                 <button type="button" class="more" onclick={() => (all[k] = !all[k])}>
                   {all[k] ? 'show less' : `show all ${op.values.length}`}
