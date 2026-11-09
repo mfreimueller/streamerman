@@ -171,10 +171,44 @@ const tasks: Task[] = [
       { name: 'a movie counts for all its genres', hidden: true, args: [], data: { movies: MULTI }, expected: [MULTI[0]] },
     ],
   },
+  {
+    id: 'findById',
+    title: 'Find a movie by id',
+    returnType: cls('Optional', cls('Movie')),
+    params: [{ name: 'id', type: INT }],
+    description: 'Finds and returns the movie identified by id. If no movie was found, the result is an empty Optional.',
+    solution: 'movies.stream().filter(m -> m.id() == id).findFirst()',
+    checks: [
+      { name: 'id 3 (Dune, 1984)', hidden: false, args: [3], expected: some(MOVIES[2]) },
+      { name: 'the last movie', hidden: false, args: [14], expected: some(MOVIES[13]) },
+      { name: 'unknown id: an empty Optional', hidden: true, args: [99], expected: none() },
+      { name: 'no movies at all', hidden: true, args: [1], data: { movies: [] }, expected: none() },
+    ],
+  },
+  {
+    id: 'totalRuntimeOfGenre',
+    title: 'Total runtime of a genre',
+    returnType: INT,
+    params: [{ name: 'genre', type: cls('Genre') }],
+    description: 'Calculates the total runtime (in minutes) of all movies of a given genre.',
+    solution: 'movies.stream().filter(m -> m.genres().contains(genre)).mapToInt(Movie::runtimeMinutes).sum()',
+    checks: [
+      { name: 'Drama (README: 948 minutes)', hidden: false, args: [gen('DRAMA')], expected: 948 },
+      { name: 'Mystery', hidden: false, args: [gen('MYSTERY')], expected: 716 },
+      { name: 'Horror', hidden: true, args: [gen('HORROR')], expected: 404 },
+      { name: 'Romance has a single movie', hidden: true, args: [gen('ROMANCE')], expected: 124 },
+      { name: 'no movie has this genre', hidden: true, args: [gen('SCI_FI')], data: { movies: TWO }, expected: 0 },
+      { name: 'no movies at all', hidden: true, args: [gen('DRAMA')], data: { movies: [] }, expected: 0 },
+    ],
+  },
 ];
 
 
 const ORDER = ['findById', 'countByGenre', 'titlesReleasedAfter', 'titlesByDirector', 'countWellRated', 'totalRuntimeOfGenre', 'titlesOfMostFrequentDirector', 'moviesOfGenreWithHighestAverageRating'];
+// The order must name exactly the tasks that exist: a missing or unknown id is a bug, so fail at load time.
+if (ORDER.length !== tasks.length || ORDER.some((id) => !tasks.some((t) => t.id === id))) {
+  throw new Error(`movies: ORDER (${ORDER.join(', ')}) does not match the tasks (${tasks.map((t) => t.id).join(', ')})`);
+}
 tasks.sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
 
 export const movieArchive: Unit = {

@@ -83,3 +83,29 @@ describe('run', () => {
     expect(r.checks[0].error).toMatch(/^IndexOutOfBoundsException: Index 5 out of bounds for length/);
   });
 });
+
+describe('task lists', () => {
+  const ids = (unit: string) => units.find((u) => u.id === unit)!.tasks.map((t) => t.id);
+  it('drills', () => {
+    expect(ids('drills')).toEqual([
+      'evenNumbers', 'shout', 'countLongWords', 'doubledAbove', 'anyStartsWith', 'firstDistinct', 'adultNames',
+      'sortedByAge', 'ranking', 'firstLongWord', 'totalLetters', 'averageAge', 'flatten', 'product',
+      'commaSeparated', 'countByClass', 'splitByParity', 'nameToAge',
+    ]);
+  });
+  it('movies', () => {
+    expect(ids('movies')).toEqual([
+      'findById', 'countByGenre', 'titlesReleasedAfter', 'titlesByDirector', 'countWellRated',
+      'totalRuntimeOfGenre', 'titlesOfMostFrequentDirector', 'moviesOfGenreWithHighestAverageRating',
+    ]);
+  });
+  it('music', () => {
+    expect(ids('music')).toEqual([
+      'totalSecondsPlayed', 'longestPlay', 'artistOverview', 'playsPerGenre', 'countSkipped',
+      'titlesPerArtist', 'secondsPerArtist', 'topArtist',
+    ]);
+  });
+  it('the unit list', () => {
+    expect(units.map((u) => u.id)).toEqual(['drills', 'movies', 'music']);
+  });
+});
