@@ -9,7 +9,8 @@ const JSHELL = process.env.JSHELL ?? '/Users/mf/.sdkman/candidates/java/current/
 const cases = JSON.parse(readFileSync(new URL('./cases.json', import.meta.url), 'utf8'));
 const prelude = readFileSync(new URL('./prelude.jsh', import.meta.url), 'utf8');
 
-const body = cases
+const exprs = cases.map((c) => (typeof c === 'string' ? c : c.expr));
+const body = exprs
   .map(
     (c, i) =>
       `System.out.println("@@${i}");\ntry { Object r = ${c}; System.out.println(r); } catch (Exception e) { System.out.println(e.getClass().getSimpleName() + ": " + e.getMessage()); }`,
@@ -19,10 +20,10 @@ const dir = mkdtempSync(join(tmpdir(), 'jshell-'));
 const file = join(dir, 'run.jsh');
 writeFileSync(file, `${prelude}\n${body}\n/exit\n`);
 const out = execFileSync(JSHELL, ['--feedback', 'silent', file], { encoding: 'utf8' });
-const results = cases.map((expr, i) => {
+const results = exprs.map((expr, i) => {
   const start = out.indexOf(`@@${i}\n`);
-  const next = i + 1 < cases.length ? out.indexOf(`@@${i + 1}\n`) : out.length;
-  return { expr, java: out.slice(start + `@@${i}\n`.length, next).replace(/\n$/, '') };
+  const next = i + 1 < exprs.length ? out.indexOf(`@@${i + 1}\n`) : out.length;
+  return { ...(typeof cases[i] === 'string' ? {} : { unit: cases[i].unit }), expr, java: out.slice(start + `@@${i}\n`.length, next).replace(/\n$/, '') };
 });
 writeFileSync(new URL('../../tests/fixtures/java-output.json', import.meta.url), JSON.stringify(results, null, 2) + '\n');
 console.log(`wrote ${results.length} fixtures`);

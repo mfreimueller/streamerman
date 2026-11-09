@@ -9,6 +9,12 @@ export interface Binding {
   description?: string;
 }
 
+export interface Step {
+  name?: string;
+  type: JType;
+  description: string;
+}
+
 export interface Param { name: string; type: JType }
 
 export interface Check {
@@ -32,8 +38,12 @@ export interface Task {
   description: string;
   forbidden?: string[];
   ruleText?: string;
-  /** Model solution: the returned expression, as Java source. */
-  solution: string;
+  /** Guided steps; the last one is the `return` (no name) and has the task's return type. */
+  steps?: Step[];
+  /** Records that may be created with `new X(...)`. */
+  constructors?: string[];
+  /** Model solution: one Java expression per step (a single string when there are no steps). */
+  solution: string | string[];
   checks: Check[];
 }
 
@@ -53,3 +63,6 @@ export const signatureOf = (t: Task) =>
   `${show(t.returnType)} ${t.id}(${t.params.map((p) => `${show(p.type)} ${p.name}`).join(', ')})`;
 
 export const bindingsOf = (u: Unit, t: Task): Binding[] => [...u.context, ...(t.context ?? [])];
+
+export const stepsOf = (t: Task): Step[] => t.steps ?? [{ type: t.returnType, description: '' }];
+export const solutionsOf = (t: Task): string[] => (Array.isArray(t.solution) ? t.solution : [t.solution]);

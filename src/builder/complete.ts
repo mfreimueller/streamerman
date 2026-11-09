@@ -11,7 +11,7 @@ import {
   ANY, BOOLEAN, INT, STRING, assignable, cls, fnShape, isAny, isBoolean, isNumeric, sameType, show, unbox, type JType,
 } from '../lang/types';
 import type { Universe } from '../lang/universe';
-import { clear, currentStmt, fill, firstHoleOtherThan, setCursor, unwrapCall, wrap, type EditorState } from './edit';
+import { clear, currentStmt, fill, firstHoleOtherThan, selectStmt, setCursor, unwrapCall, wrap, type EditorState } from './edit';
 
 export interface ActionItem {
   kind: 'item';
@@ -99,6 +99,15 @@ export function complete(state: EditorState, res: CheckResult, ctx: CompleteCtx)
         kind: 'item', label: '→ next gap', detail: '', doc: 'Jump to the next unfinished place in the code.',
         apply: (s) => setCursor(s, nextGap),
       }],
+    });
+  }
+
+  if (state.stmtIndex < state.program.stmts.length - 1 && res.holes.length === 0) {
+    const nextStmt = state.program.stmts[state.stmtIndex + 1];
+    const nav = groups.find((g) => g.title === 'Navigate') ?? (groups.push({ title: 'Navigate', items: [] }), groups[groups.length - 1]);
+    nav.items.push({
+      kind: 'item', label: `→ step ${state.stmtIndex + 2}`, detail: nextStmt.name ? `${show(nextStmt.type)} ${nextStmt.name}` : 'return',
+      doc: 'Continue with the next step.', apply: (s) => selectStmt(s, s.stmtIndex + 1),
     });
   }
 

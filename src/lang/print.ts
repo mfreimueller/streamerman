@@ -175,3 +175,13 @@ export function toJavaShort(n: Node): string {
   const s = text(exprTokens(n, { short: true, flat: true }));
   return s.length > 48 ? '…' + s.slice(-46) : s;
 }
+
+/** Label of one operation of a chain: `.filter(m -> …)`; the source keeps its receiver: `movies.stream()`. */
+export function toJavaOp(c: Extract<Node, { t: 'call' }>): string {
+  const arg = (a: Node) =>
+    a.t === 'lambda'
+      ? `${a.ptypes ? `(${a.params.map((q, i) => `${show(a.ptypes![i])} ${q}`).join(', ')})` : a.params.length === 1 ? a.params[0] : `(${a.params.join(', ')})`} -> …`
+      : toJavaShort(a);
+  const call = `${c.name}(${c.args.map(arg).join(', ')})`;
+  return c.target.t === 'call' ? `.${call}` : `${toJavaShort(c.target)}.${call}`;
+}

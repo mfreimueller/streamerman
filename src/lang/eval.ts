@@ -4,10 +4,11 @@ import type { NodeInfo } from './check';
 import { isNumeric, show, type JType } from './types';
 import type { Universe } from './universe';
 import { JMap, JavaException, toJavaString } from '../engine/values';
+import type { Tracer } from '../engine/trace';
 
 export type Values = Map<string, unknown>;
 
-export function evaluate(root: Node, values: Values, info: Map<number, NodeInfo>, u: Universe): unknown {
+export function evaluate(root: Node, values: Values, info: Map<number, NodeInfo>, u: Universe, trace?: Tracer): unknown {
   const typeOf = (n: Node): JType => info.get(n.id)!.type;
 
   const ev = (n: Node, env: Values): any => {
@@ -46,7 +47,8 @@ export function evaluate(root: Node, values: Values, info: Map<number, NodeInfo>
           throw new JavaException('NullPointerException', `Cannot invoke "${n.name}()" because value is null`);
         }
         const args = n.args.map((a) => ev(a, env));
-        return ni.member!.eval(recv, args, { u }, { recv: ni.recv!, args: ni.argTypes ?? [] });
+        const out = ni.member!.eval(recv, args, { u }, { recv: ni.recv!, args: ni.argTypes ?? [] });
+        return trace?.traces(n.id) ? trace.record(n, out, recv) : out;
       }
       case 'scall': {
         const ni = info.get(n.id)!;

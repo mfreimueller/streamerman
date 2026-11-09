@@ -10,7 +10,7 @@ export interface Cursor {
   selected?: boolean;
 }
 
-interface Snapshot { program: Program; cursor: Cursor }
+interface Snapshot { program: Program; cursor: Cursor; stmtIndex: number }
 
 export interface EditorState {
   program: Program;
@@ -34,7 +34,7 @@ function commit(s: EditorState, root: Node, cursor: Cursor): EditorState {
     ...s,
     program: { stmts },
     cursor,
-    history: [...s.history, { program: s.program, cursor: s.cursor }],
+    history: [...s.history, { program: s.program, cursor: s.cursor, stmtIndex: s.stmtIndex }],
   };
 }
 
@@ -91,7 +91,7 @@ export function clearAll(s: EditorState): EditorState {
 export function undo(s: EditorState): EditorState {
   const last = s.history[s.history.length - 1];
   if (!last) return s;
-  return { ...s, program: last.program, cursor: last.cursor, history: s.history.slice(0, -1) };
+  return { ...s, program: last.program, cursor: last.cursor, stmtIndex: last.stmtIndex, history: s.history.slice(0, -1) };
 }
 
 export function setCursor(s: EditorState, nodeId: number, selected = false): EditorState {
@@ -103,4 +103,11 @@ export function setCursor(s: EditorState, nodeId: number, selected = false): Edi
 
 export function firstHoleOtherThan(s: EditorState, nodeId: number): number | undefined {
   return holesOf(currentStmt(s).root).find((h) => h.id !== nodeId)?.id;
+}
+
+/** Make another statement (step) the active one; the cursor goes to its first gap, or after its expression. */
+export function selectStmt(s: EditorState, index: number): EditorState {
+  const st = s.program.stmts[index];
+  if (!st || index === s.stmtIndex) return s;
+  return { ...s, stmtIndex: index, cursor: cursorAfter(st.root) };
 }

@@ -51,6 +51,11 @@ const ALL_TITLES = MOVIES.map((m) => m.title);
 const LYNCH_TITLES = MOVIES.filter((m) => m.director === 'David Lynch').map((m) => m.title);
 const TWO = MOVIES.slice(0, 2);
 const gen = (n: string) => g(n);
+const film = (id: number, genres: string[], rating: number) => mv(id, `F${id}`, 2000, genres, rating, 1000, 'D', 90, 'X');
+const HI = [film(1, ['HORROR'], 9), film(2, ['DRAMA'], 7), film(3, ['DRAMA'], 8)];
+const AVG = [film(1, ['DRAMA'], 6), film(2, ['DRAMA'], 6), film(3, ['DRAMA'], 6), film(4, ['CRIME'], 8)];
+const TIE = [film(1, ['ROMANCE'], 7), film(2, ['FANTASY'], 7)];
+const MULTI = [film(1, ['CRIME', 'DRAMA'], 9), film(2, ['CRIME'], 5)];
 
 const tasks: Task[] = [
   {
@@ -118,7 +123,7 @@ const tasks: Task[] = [
 ];
 
 
-const ORDER = ['findById', 'countByGenre', 'titlesReleasedAfter', 'titlesByDirector', 'countWellRated', 'totalRuntimeOfGenre'];
+const ORDER = ['findById', 'countByGenre', 'titlesReleasedAfter', 'titlesByDirector', 'countWellRated', 'totalRuntimeOfGenre', 'titlesOfMostFrequentDirector', 'moviesOfGenreWithHighestAverageRating'];
 tasks.sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
 
 export const movieArchive: Unit = {

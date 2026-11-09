@@ -1,5 +1,5 @@
 // Static type checker over the expression tree.
-import type { BinOp, Node, Stmt } from './ast';
+import type { BinOp, Node, Program, Stmt } from './ast';
 import { holesOf } from './ast';
 import {
   ANY, BOOLEAN, DOUBLE, FUNCTIONAL, INT, LONG, STRING, assignable, cls, fnShape, isAny, isBoolean,
@@ -248,3 +248,13 @@ export function typecheck(stmt: Stmt, env: Env, u: Universe): CheckResult {
   return { info, errors, holes, incomplete: holes.length > 0, type };
 }
 
+
+/** Type-check every statement; earlier named statements are visible (with their declared type) in later ones. */
+export function checkProgram(program: Program, base: Env, u: Universe): CheckResult[] {
+  const env: Env = new Map(base);
+  return program.stmts.map((st) => {
+    const r = typecheck(st, new Map(env), u);
+    if (st.name) env.set(st.name, st.type);
+    return r;
+  });
+}

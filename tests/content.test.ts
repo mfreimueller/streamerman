@@ -1,24 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import { units } from '../src/content';
-import { bindingsOf, signatureOf } from '../src/content/types';
+import { bindingsOf, signatureOf, solutionsOf, stepsOf } from '../src/content/types';
+import { solutionProgram } from '../src/content/solution';
 import { runTask, taskEnv } from '../src/run';
 import { parseExpr } from '../src/lang/parse';
-import { typecheck } from '../src/lang/check';
+import { checkProgram } from '../src/lang/check';
 import { toJava } from '../src/lang/print';
 import { hole, call, name } from '../src/lang/ast';
-import { memberId } from '../src/lang/members';
+import { isForbidden, memberId } from '../src/lang/members';
 
 describe('content', () => {
   for (const unit of units) {
     describe(unit.title, () => {
       for (const task of unit.tasks) {
         it(`${task.id}: model solution parses, type-checks and passes every check`, () => {
-          const root = parseExpr(task.solution, unit.universe.kindOf);
-          const stmt = { type: task.returnType, root };
-          const res = typecheck(stmt, taskEnv(unit, task), unit.universe);
-          expect(res.errors).toEqual([]);
-          expect(res.incomplete).toBe(false);
-          const report = runTask(unit, task, { stmts: [stmt] });
+          const program = solutionProgram(unit, task);
+          const results = checkProgram(program, taskEnv(unit, task), unit.universe);
+          expect(results.flatMap((r) => r.errors)).toEqual([]);
+          expect(results.some((r) => r.incomplete)).toBe(false);
+          const report = runTask(unit, task, program);
           expect(report.problems).toEqual([]);
           const failed = report.checks.filter((c) => !c.passed);
           expect(failed).toEqual([]);
@@ -35,11 +35,15 @@ describe('content', () => {
         });
 
         it(`${task.id}: does not use forbidden members`, () => {
-          const root = parseExpr(task.solution, unit.universe.kindOf);
-          const res = typecheck({ type: task.returnType, root }, taskEnv(unit, task), unit.universe);
-          const used = [...res.info.values()].filter((i) => i.member).map((i) => memberId(i.member!));
-          for (const f of task.forbidden ?? []) expect(used).not.toContain(f);
-          expect(toJava(root).length).toBeGreaterThan(0);
+          const program = solutionProgram(unit, task);
+          const results = checkProgram(program, taskEnv(unit, task), unit.universe);
+          const used = results.flatMap((r) => [...r.info.values()]).filter((i) => i.member).map((i) => i.member!);
+          for (const f of task.forbidden ?? []) {
+            expect(used.filter((m) => isForbidden([f], m)).map(memberId)).toEqual([]);
+          }
+          expect(program.stmts.map((s) => toJava(s)).join('').length).toBeGreaterThan(0);
+          expect(stepsOf(task)[stepsOf(task).length - 1].type).toEqual(task.returnType);
+          expect(solutionsOf(task).length).toBe(stepsOf(task).length);
         });
       }
     });
