@@ -2,6 +2,7 @@
 import {
   bin, call, enumConst, lambda, lit, mref, name, scall, un, type BinOp, type Node,
 } from './ast';
+import { cls, prim, type JType } from './types';
 
 type T = { k: 'id' | 'int' | 'long' | 'double' | 'str' | 'op' | 'eof'; v: string };
 
@@ -82,15 +83,50 @@ export function parseExpr(src: string, kindOf: KindOf = () => undefined): Node {
     return list;
   };
 
-  const lambdaAhead = (): string[] | null => {
-    // ( ) ->   |   ( a , b ) ->
+  /** Parse a type like `Map.Entry<String, Long>` starting at token offset i; returns [type, next offset] or null. */
+  const typeAt = (i: number): [JType, number] | null => {
+    if (peek(i).k !== 'id') return null;
+    let nm = peek(i++).v;
+    while (isOp(peek(i), '.') && peek(i + 1).k === 'id') {
+      nm += `.${peek(i + 1).v}`;
+      i += 2;
+    }
+    if (['int', 'long', 'double', 'boolean'].includes(nm)) return [prim(nm as 'int'), i];
+    const targs: JType[] = [];
+    if (isOp(peek(i), '<')) {
+      i++;
+      for (;;) {
+        const r = typeAt(i);
+        if (!r) return null;
+        targs.push(r[0]);
+        i = r[1];
+        if (isOp(peek(i), ',')) { i++; continue; }
+        if (isOp(peek(i), '>')) { i++; break; }
+        return null;
+      }
+    }
+    return [cls(nm, ...targs), i];
+  };
+
+  // ( ) ->   |   ( a , b ) ->   |   ( Type a , Type b ) ->
+  const lambdaAhead = (): { params: string[]; ptypes?: JType[] } | null => {
     let i = 1;
     const ps: string[] = [];
+    const ts: JType[] = [];
+    let typed = false;
     if (isOp(peek(i), ')')) i++;
     else {
       for (;;) {
-        if (peek(i).k !== 'id') return null;
-        ps.push(peek(i++).v);
+        if (peek(i).k === 'id' && (isOp(peek(i + 1), ',') || isOp(peek(i + 1), ')'))) {
+          ps.push(peek(i++).v);
+        } else {
+          const r = typeAt(i);
+          if (!r || peek(r[1]).k !== 'id') return null;
+          typed = true;
+          ts.push(r[0]);
+          ps.push(peek(r[1]).v);
+          i = r[1] + 1;
+        }
         if (isOp(peek(i), ',')) { i++; continue; }
         if (isOp(peek(i), ')')) { i++; break; }
         return null;
@@ -98,7 +134,7 @@ export function parseExpr(src: string, kindOf: KindOf = () => undefined): Node {
     }
     if (!isOp(peek(i), '->')) return null;
     p += i + 1;
-    return ps;
+    return typed ? { params: ps, ptypes: ts } : { params: ps };
   };
 
   const primary = (): Node => {
@@ -110,6 +146,10 @@ export function parseExpr(src: string, kindOf: KindOf = () => undefined): Node {
       case 'str': return lit('String', t.v);
       case 'id': {
         if (t.v === 'true' || t.v === 'false') return lit('boolean', t.v === 'true');
+        if (t.v === 'new') {
+          const cn = next().v;
+          return scall(cn, 'new', args());
+        }
         if (isOp(peek(), '->')) {
           next();
           return lambda([t.v], expr(0));
@@ -137,8 +177,8 @@ export function parseExpr(src: string, kindOf: KindOf = () => undefined): Node {
       case 'op':
         if (t.v === '(') {
           p--;
-          const ps = lambdaAhead();
-          if (ps) return lambda(ps, expr(0));
+          const la = lambdaAhead();
+          if (la) return lambda(la.params, expr(0), la.ptypes);
           p++;
           const e = expr(0);
           expect(')');

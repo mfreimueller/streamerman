@@ -114,12 +114,13 @@ describe('completions for collectors, comparators and references', () => {
   it('offers only method references inside Comparator.comparing(...)', () => {
     const b = mk(cls('List', STRING));
     b.pick('plays').pick('stream()').pick('sorted(comparator)').pick('Comparator.comparing(keyExtractor)');
-    expect(b.labels().some((l) => l.includes('->'))).toBe(false);
+    expect(b.labels().some((l) => /^[a-z]\d* ->/.test(l))).toBe(false); // no implicitly typed lambda
+    expect(b.labels()).toContain('(Play p) -> …');
     expect(b.labels()).toContain('Play::artist');
     b.pick('Play::title').pick('reversed()', 'on Comparator.comparing');
     expect(b.code()).toBe('plays.stream().sorted(Comparator.comparing(Play::title).reversed())');
     b.pick('thenComparing(keyExtractor)');
-    expect(b.labels().some((l) => l.includes('->'))).toBe(false);
+    expect(b.labels().some((l) => /^[a-z]\d* ->/.test(l))).toBe(false);
     b.pick('Play::artist');
     expect(b.code()).toBe('plays.stream().sorted(Comparator.comparing(Play::title).reversed().thenComparing(Play::artist))');
     const r = b.res();
@@ -136,5 +137,26 @@ describe('completions for collectors, comparators and references', () => {
     b.pick('plays').pick('stream()');
     expect(b.labels('on plays.stream()')).not.toContain('max(comparator)');
     expect(b.labels('on plays.stream()')).toContain('min(comparator)');
+  });
+
+  it('builds a typed lambda comparator that can be reversed', () => {
+    const b = mk(cls('List', STRING));
+    b.pick('plays').pick('stream()').pick('sorted(comparator)').pick('Comparator.comparingInt(keyExtractor)');
+    b.pick('(Play p) -> …').pick('p').pick('secondsPlayed()');
+    b.pick('reversed()', 'on Comparator.comparingInt');
+    expect(b.code()).toBe('plays.stream().sorted(Comparator.comparingInt((Play p) -> p.secondsPlayed()).reversed())');
+    const r = b.res();
+    expect(r.errors.filter((e) => !r.info.get(e.id)?.mismatch)).toEqual([]);
+  });
+  it('shows result types with Java-style names in static rows', () => {
+    const b = mk();
+    b.pick('plays').pick('stream()').pick('collect(collector)');
+    const row = (l: string) => b.comp().groups.flatMap((g) => g.items).find((i) => i.label === l)!;
+    expect(row('Collectors.groupingBy(classifier, downstream)').detail).toBe('Map<K, D>');
+    expect(row('Collectors.groupingBy(classifier)').detail).toBe('Map<K, List<Play>>');
+    expect(row('Collectors.toMap(keyMapper, valueMapper)').detail).toBe('Map<K, U>');
+    expect(row('Collectors.counting()').detail).toBe('Long');
+    expect(row('Collectors.toList()').detail).toBe('List<Play>');
+    expect(row('Collectors.mapping(mapper, downstream)').detail).toBe('R');
   });
 });

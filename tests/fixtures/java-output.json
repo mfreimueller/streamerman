@@ -206,5 +206,13 @@
   {
     "expr": "words.stream().skip(5).anyMatch(w -> w.startsWith(\"f\"))",
     "java": "true"
+  },
+  {
+    "expr": "plays.stream().sorted(Comparator.comparingInt((Play p) -> p.secondsPlayed()).reversed().thenComparing(Play::title)).map(Play::title).toList()",
+    "java": "[Infinite Loop, Take Five Threads, Blue Screen Blues, Segfault Serenade, Optional.empty(), Optional.empty(), Mark and Sweep, Mark and Sweep, Pure Function, Infinite Loop, Segfault Serenade, Heap Space]"
+  },
+  {
+    "expr": "plays.stream().map(p -> List.of(p.artist(), p.title())).distinct().limit(3).toList()",
+    "java": "[[The Null Pointers, Segfault Serenade], [Lambda Lovers, Optional.empty()], [Stack Overflow, Infinite Loop]]"
   }
 ]

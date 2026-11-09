@@ -23,6 +23,8 @@ export interface Member {
   doc: string;
   example: string;
   tag?: 'intermediate' | 'terminal';
+  /** Names for unknown (any) parts of the displayed result type, in order, e.g. ['K', 'D']. */
+  vars?: string[];
   /** Is it sensible to offer this member for the receiver? (Typing ignores this.) */
   when?(recv: JType, u: Universe): boolean;
 }
@@ -40,6 +42,7 @@ export interface Spec {
   doc: string;
   example: string;
   tag?: 'intermediate' | 'terminal';
+  vars?: string[];
   when?: (recv: JType, u: Universe) => boolean;
 }
 
@@ -48,7 +51,7 @@ export function mk(owner: string, name: string, params: string[], s: Spec, kind:
     owner, name, arity: params.length, kind, params,
     args: s.args ? (r, u, prev = []) => s.args!(r, u, prev) : () => params.map(() => ANY),
     ret: typeof s.ret === 'function' ? s.ret : () => s.ret as JType,
-    eval: s.eval, doc: s.doc, example: s.example, tag: s.tag, when: s.when,
+    eval: s.eval, doc: s.doc, example: s.example, tag: s.tag, when: s.when, vars: s.vars,
   };
 }
 
@@ -280,12 +283,30 @@ export function findMember(recv: JType, name: string, arity: number, u: Universe
   return membersOf(recv, u).find((m) => m.name === name && m.arity === arity);
 }
 
+/** Type with Java-style names for the unknown parts: `Map<K, D>`. */
+export function showNamed(t: JType, vars: string[] = ['R']): string {
+  let i = 0;
+  const go = (x: JType): string => {
+    if (x.k === 'any') return vars[i++] ?? vars[vars.length - 1] ?? 'R';
+    if (x.k === 'prim') return x.n;
+    if (x.n === 'Collector' && x.a[1]?.k === 'any') return `Collector<${go(x.a[0])}, ?, ${go(x.a[2] ?? ANY)}>`;
+    return x.a.length ? `${x.n}<${x.a.map(go).join(', ')}>` : x.n;
+  };
+  return go(t);
+}
+
+/** What a completion row shows as the result of the member (Collectors show what they produce). */
+export function retDisplay(m: Member, recv: JType, u: Universe): string {
+  let r = m.ret(recv, m.args(recv, u), u);
+  if (m.owner === 'Collectors') r = typeArg(r, 2);
+  return showNamed(r, m.vars ?? ['R']);
+}
+
 /** Display signature, e.g. `filter(Predicate<Movie> predicate)  → Stream<Movie>`. */
 export function signature(m: Member, recv: JType, u: Universe): string {
   const at = m.args(recv, u);
-  const ps = m.params.map((p, i) => `${show(at[i] ?? ANY)} ${p}`).join(', ');
-  const ret = show(m.ret(recv, at, u));
+  const ps = m.params.map((p, i) => `${showNamed(at[i] ?? ANY, ['R', 'R', 'D'])} ${p}`).join(', ');
   const owner = m.kind === 'static' ? `${m.owner}.` : '';
-  return `${owner}${m.name}(${ps})  → ${ret}`.replace(/\?/g, 'R');
+  return `${owner}${m.name}(${ps})  → ${retDisplay(m, recv, u)}`;
 }
 

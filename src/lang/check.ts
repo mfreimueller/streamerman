@@ -86,7 +86,12 @@ export function typecheck(stmt: Stmt, env: Env, u: Universe): CheckResult {
         return cls(n.owner);
       }
       case 'lambda': {
-        const shape = fnShape(expected);
+        let exp = expected;
+        if (n.ptypes && n.ptypes.length === 1 && exp.k === 'cls' && FUNCTIONAL[exp.n] && exp.a[0] && isAny(exp.a[0])) {
+          // an explicit parameter type tells the element type, as in Comparator.comparingInt((Movie m) -> ...)
+          exp = cls(exp.n, n.ptypes[0], ...exp.a.slice(1));
+        }
+        const shape = fnShape(exp);
         if (!shape) {
           ni.error = isAny(expected) ? 'A lambda is not allowed here' : `Expected ${show(expected)} but got a lambda`;
           visit(n.body, e, ANY);
@@ -97,10 +102,15 @@ export function typecheck(stmt: Stmt, env: Env, u: Universe): CheckResult {
           visit(n.body, e, ANY);
           return expected;
         }
+        const ptypes = n.ptypes ?? shape.params;
+        if (n.ptypes) {
+          const bad = n.ptypes.findIndex((t, i) => !isAny(shape.params[i]) && !assignable(shape.params[i], t));
+          if (bad >= 0) ni.error = `Parameter ${n.params[bad]} should be ${show(shape.params[bad])}, not ${show(n.ptypes[bad])}`;
+        }
         const e2: Env = new Map(e);
-        n.params.forEach((p, i) => e2.set(p, shape.params[i]));
+        n.params.forEach((p, i) => e2.set(p, ptypes[i]));
         const bodyExpected = shape.ret.k === 'prim' && shape.ret.n === 'void' ? ANY : shape.ret;
-        return withFnReturn(expected, visit(n.body, e2, bodyExpected));
+        return withFnReturn(exp, visit(n.body, e2, bodyExpected));
       }
       case 'mref': {
         if (n.name === 'new') {
@@ -177,7 +187,7 @@ export function typecheck(stmt: Stmt, env: Env, u: Universe): CheckResult {
         return m.ret(rt, ats, u);
       }
       case 'scall': {
-        const m = findStatic(n.owner, n.name, n.args.length);
+        const m = findStatic(n.owner, n.name, n.args.length, u);
         if (!m) {
           n.args.forEach((a) => visit(a, e, ANY));
           ni.error = `Cannot find method ${n.owner}.${compactCall(n.name, n.args.length)}`;

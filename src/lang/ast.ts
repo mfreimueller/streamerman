@@ -13,7 +13,7 @@ export interface Lit { t: 'lit'; id: number; type: LitType; value: number | bool
 export interface Call { t: 'call'; id: number; target: Node; name: string; args: Node[] }
 export interface SCall { t: 'scall'; id: number; owner: string; name: string; args: Node[] }
 export interface EnumC { t: 'enum'; id: number; owner: string; name: string }
-export interface Lambda { t: 'lambda'; id: number; params: string[]; body: Node }
+export interface Lambda { t: 'lambda'; id: number; params: string[]; body: Node; /** Explicitly declared parameter types: `(Movie m) -> ...` */ ptypes?: JType[] }
 export interface MRef { t: 'mref'; id: number; owner: string; name: string }
 export interface Bin { t: 'bin'; id: number; op: BinOp; left: Node; right: Node }
 export interface Un { t: 'un'; id: number; op: '!' | '-'; operand: Node }
@@ -33,7 +33,7 @@ export const lit = (type: LitType, value: number | boolean | string): Lit => ({ 
 export const call = (target: Node, n: string, args: Node[]): Call => ({ t: 'call', id: newId(), target, name: n, args });
 export const scall = (owner: string, n: string, args: Node[]): SCall => ({ t: 'scall', id: newId(), owner, name: n, args });
 export const enumConst = (owner: string, n: string): EnumC => ({ t: 'enum', id: newId(), owner, name: n });
-export const lambda = (params: string[], body: Node): Lambda => ({ t: 'lambda', id: newId(), params, body });
+export const lambda = (params: string[], body: Node, ptypes?: JType[]): Lambda => ({ t: 'lambda', id: newId(), params, body, ptypes });
 export const mref = (owner: string, n: string): MRef => ({ t: 'mref', id: newId(), owner, name: n });
 export const bin = (op: BinOp, left: Node, right: Node): Bin => ({ t: 'bin', id: newId(), op, left, right });
 export const un = (op: '!' | '-', operand: Node): Un => ({ t: 'un', id: newId(), op, operand });

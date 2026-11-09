@@ -50,5 +50,7 @@
   "noWords.stream().findFirst().orElseThrow()",
   "words.stream().findFirst().map(String::length)",
   "words.stream().filter(w -> w.length() > 100).findFirst().orElse(\"none\")",
-  "words.stream().skip(5).anyMatch(w -> w.startsWith(\"f\"))"
+  "words.stream().skip(5).anyMatch(w -> w.startsWith(\"f\"))",
+  "plays.stream().sorted(Comparator.comparingInt((Play p) -> p.secondsPlayed()).reversed().thenComparing(Play::title)).map(Play::title).toList()",
+  "plays.stream().map(p -> List.of(p.artist(), p.title())).distinct().limit(3).toList()"
 ]

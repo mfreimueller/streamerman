@@ -87,7 +87,8 @@ export function exprTokens(root: Node, o: Opts = {}, level = 0): Tok[] {
         return tok(n.name, 'method', n.id);
       case 'lambda':
         if (o.short) return tok('…', 'punct', n.id);
-        if (n.params.length === 1) tok(n.params[0], 'var', n.id);
+        if (n.ptypes) tok(`(${n.params.map((q, i) => `${show(n.ptypes![i])} ${q}`).join(', ')})`, 'var', n.id);
+        else if (n.params.length === 1) tok(n.params[0], 'var', n.id);
         else tok(`(${n.params.join(', ')})`, 'var', n.id);
         tok(' -> ', 'op', n.id);
         return emit(n.body, lv);
@@ -101,6 +102,11 @@ export function exprTokens(root: Node, o: Opts = {}, level = 0): Tok[] {
         return sub(n.right, prec(n.right) <= p, lv);
       }
       case 'scall':
+        if (n.name === 'new') {
+          tok('new ', 'kw', n.id);
+          tok(n.owner, 'type', n.id);
+          return args(n.args, n.id, lv);
+        }
         tok(n.owner, 'type', n.id);
         tok('.', 'punct', n.id);
         tok(n.name, 'method', n.id);

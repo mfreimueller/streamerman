@@ -4,8 +4,8 @@ import {
   type BinOp, type LitType, type Node,
 } from '../lang/ast';
 import { typecheck, type CheckResult, type Env } from '../lang/check';
-import { isForbidden, membersOf, signature, type Member } from '../lang/members';
-import { CTOR_KINDS, STATICS, STATIC_REFS } from '../lang/statics';
+import { isForbidden, membersOf, retDisplay, signature, type Member } from '../lang/members';
+import { CTOR_KINDS, STATICS, STATIC_REFS, recordCtor } from '../lang/statics';
 import { toJavaShort } from '../lang/print';
 import {
   ANY, BOOLEAN, INT, STRING, assignable, cls, fnShape, isAny, isBoolean, isNumeric, sameType, show, unbox, type JType,
@@ -46,6 +46,8 @@ export interface CompleteCtx {
   u: Universe;
   /** Member ids such as `Stream.count/0` that the task forbids. */
   forbidden?: string[];
+  /** Records that may be created with `new X(...)` in this task. */
+  constructors?: string[];
   /** Values from the data to suggest for String literals (directors, titles, ...). */
   stringSuggestions?: string[];
 }
@@ -186,6 +188,20 @@ function replaceGroups(state: EditorState, res: CheckResult, ctx: CompleteCtx, h
     const receiverPos = !!par &&
       ((par.t === 'scall' && par.name.startsWith('comparing')) || (par.t === 'call' && par.name === 'thenComparing'));
     const isSupplier = E.k === 'cls' && E.n === 'Supplier';
+    if (receiverPos && shape.params.length === 1) {
+      // explicitly typed lambdas compile here: Comparator.comparingInt((Movie m) -> m.year()).reversed()
+      const q = shape.params[0];
+      const cands: JType[] = q.k === 'cls' ? [q] : isAny(q) ? [...Object.keys(u.records).map((r) => cls(r)), STRING] : [];
+      for (const ot of cands) {
+        const nm = paramNames([ot], env)[0];
+        items.push({
+          kind: 'item', label: `(${show(ot)} ${nm}) -> …`, detail: show(E),
+          doc: 'A lambda with its parameter type written out. Needed when the Comparator is extended with reversed() or thenComparing().',
+          example: `(${show(ot)} ${nm}) -> ${nm}.year()`,
+          apply: (s) => fill(s, holeId, lambda([nm], hole(), [ot])),
+        });
+      }
+    }
     if (!receiverPos && !isSupplier) {
       items.push({
         kind: 'item', label: `${names.length === 1 ? names[0] : `(${names.join(', ')})`} -> …`,
@@ -235,8 +251,8 @@ function replaceGroups(state: EditorState, res: CheckResult, ctx: CompleteCtx, h
     if (statics.length) out.push({ title: (E as any).n, items: statics });
     return out;
   }
-  if (statics.length) {
-    out.push({ title: (E as any).n, items: statics });
+  if (statics.length && E.k === 'cls' && E.n === 'Collector') {
+    out.push({ title: 'Collector', items: statics });
     return out;
   }
 
@@ -296,26 +312,31 @@ function replaceGroups(state: EditorState, res: CheckResult, ctx: CompleteCtx, h
       ],
     });
   }
+  if (statics.length) out.push({ title: isAny(E) ? 'Create' : (E as any).n, items: statics });
   return out;
 }
 
 function staticItems(ctx: CompleteCtx, holeId: number, E: JType): ActionItem[] {
-  if (E.k !== 'cls') return [];
   const out: ActionItem[] = [];
+  const item = (m: Member): ActionItem => ({
+    kind: 'item',
+    label: m.name === 'new' ? `new ${m.owner}(${m.params.join(', ')})` : `${m.owner}.${m.name}(${m.params.join(', ')})`,
+    detail: retDisplay(m, E, ctx.u),
+    signature: signature(m, E, ctx.u),
+    doc: m.doc,
+    example: m.example,
+    apply: (s) => fill(s, holeId, scall(m.owner, m.name, m.params.map(() => hole()))),
+  });
   for (const m of STATICS) {
     if (forbidden(ctx, m)) continue;
-    const ats = m.args(E, ctx.u, []);
-    const r = m.ret(E, ats, ctx.u);
-    if (r.k !== 'cls' || r.n !== E.n || !assignable(r, E)) continue;
-    out.push({
-      kind: 'item',
-      label: `${m.owner}.${m.name}(${m.params.join(', ')})`,
-      detail: show(r).replace(/\?/g, 'R'),
-      signature: signature(m, E, ctx.u),
-      doc: m.doc,
-      example: m.example,
-      apply: (s) => fill(s, holeId, scall(m.owner, m.name, m.params.map(() => hole()))),
-    });
+    if (E.k === 'cls') {
+      const r = m.ret(E, m.args(E, ctx.u, []), ctx.u);
+      if (r.k === 'cls' && r.n === E.n && assignable(r, E)) out.push(item(m));
+    } else if (isAny(E) && m.owner === 'List') out.push(item(m));
+  }
+  for (const rn of ctx.constructors ?? []) {
+    const rec = ctx.u.records[rn];
+    if (rec && (isAny(E) || (E.k === 'cls' && E.n === rn))) out.push(item(recordCtor(rec)));
   }
   return out;
 }

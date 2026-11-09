@@ -1,6 +1,7 @@
 // Static members (Collectors.x, Comparator.x, ...) and static / constructor method references.
 import { ANY, INT, STRING, box, cls, promote, typeArg, type JType } from './types';
-import { mk, type Member } from './members';
+import { memberId, mk, type Member } from './members';
+import type { RecordDef, Universe } from './universe';
 import * as C from '../engine/collectors';
 import { JMap, naturalCompare, type CollKind } from '../engine/values';
 
@@ -106,10 +107,53 @@ const MISC: Member[] = [
   }),
 ];
 
-export const STATICS: Member[] = [...COLLECTORS, ...COMPARATORS, ...ENTRY_STATICS, ...MISC];
+const listOf = (n: number) =>
+  st('List', 'of', Array.from({ length: n }, (_, i) => `e${i + 1}`), {
+    args: (e, _u, prev) => {
+      const el = typeArg(e, 0).k !== 'any' ? typeArg(e, 0) : prev[0] ? box(prev[0]) : ANY;
+      return Array(n).fill(el);
+    },
+    ret: (e, a) => cls('List', typeArg(e, 0).k !== 'any' ? typeArg(e, 0) : box(a[0] ?? ANY)),
+    eval: (_r, a) => Object.freeze([...a]),
+    doc: 'Creates an unmodifiable list of the given elements.',
+    example: 'List.of(a.name(), b.name())',
+  });
 
-export const findStatic = (owner: string, name: string, arity: number) =>
-  STATICS.find((m) => m.owner === owner && m.name === name && m.arity === arity);
+export const STATICS: Member[] = [...COLLECTORS, ...COMPARATORS, ...ENTRY_STATICS, ...MISC, listOf(1), listOf(2), listOf(3)];
+
+const VARS: Record<string, string[]> = {
+  'Collectors.groupingBy/1': ['K'],
+  'Collectors.groupingBy/2': ['K', 'D'],
+  'Collectors.groupingBy/3': ['K', 'D'],
+  'Collectors.toMap/2': ['K', 'U'],
+  'Collectors.toMap/3': ['K', 'U'],
+  'Collectors.toMap/4': ['K', 'U'],
+  'Collectors.mapping/2': ['R'],
+};
+for (const m of STATICS) m.vars = VARS[memberId(m)] ?? (['Comparator', 'Map.Entry', 'Function', 'BinaryOperator', 'List'].includes(m.owner) ? ['T'] : ['R']);
+
+/** `new Record(a, b)`: a static member synthesized from the record's fields. */
+export function recordCtor(rec: RecordDef): Member {
+  return mk(rec.name, 'new', rec.fields.map((f) => f.name), {
+    args: () => rec.fields.map((f) => f.type),
+    ret: cls(rec.name),
+    eval: (_r, a) => {
+      const o: Record<string, unknown> = { $rec: rec.name };
+      rec.fields.forEach((f, i) => (o[f.name] = a[i]));
+      return o;
+    },
+    doc: `Creates a new ${rec.name}. Pass one value per field, in this order.`,
+    example: `new ${rec.name}(${rec.fields.map((f) => f.name).join(', ')})`,
+  }, 'static');
+}
+
+export function findStatic(owner: string, name: string, arity: number, u?: Universe): Member | undefined {
+  if (name === 'new' && u?.records[owner]) {
+    const c = recordCtor(u.records[owner]);
+    return c.arity === arity ? c : undefined;
+  }
+  return STATICS.find((m) => m.owner === owner && m.name === name && m.arity === arity);
+}
 
 // ---- static / constructor method references -----------------------------------
 
