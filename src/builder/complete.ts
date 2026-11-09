@@ -1,13 +1,14 @@
 // Completion catalogue: what may be put at the cursor.
 import {
-  bin, call, children, enumConst, find, hole, lambda, lit, mref, name, parents, replaceById, un,
+  bin, call, children, enumConst, find, hole, lambda, lit, mref, name, parents, replaceById, scall, un,
   type BinOp, type LitType, type Node,
 } from '../lang/ast';
 import { typecheck, type CheckResult, type Env } from '../lang/check';
-import { memberId, membersOf, signature, type Member } from '../lang/members';
+import { isForbidden, membersOf, signature, type Member } from '../lang/members';
+import { CTOR_KINDS, STATICS, STATIC_REFS } from '../lang/statics';
 import { toJavaShort } from '../lang/print';
 import {
-  ANY, BOOLEAN, assignable, fnShape, isAny, isBoolean, isNumeric, sameType, show, unbox, type JType,
+  ANY, BOOLEAN, INT, STRING, assignable, cls, fnShape, isAny, isBoolean, isNumeric, sameType, show, unbox, type JType,
 } from '../lang/types';
 import type { Universe } from '../lang/universe';
 import { clear, currentStmt, fill, firstHoleOtherThan, setCursor, unwrapCall, wrap, type EditorState } from './edit';
@@ -72,7 +73,7 @@ function paramNames(types: JType[], env: Env): string[] {
   const names: string[] = [];
   types.forEach((t, i) => {
     let base = types.length === 2 ? (i === 0 ? 'a' : 'b') : 'x';
-    if (types.length !== 2 && t.k === 'cls') base = SIMPLE_PARAM[t.n] ?? t.n[0].toLowerCase();
+    if (types.length !== 2 && t.k === 'cls') base = t.n.startsWith('Map.Entry') ? 'e' : SIMPLE_PARAM[t.n] ?? t.n[0].toLowerCase();
     else if (types.length !== 2 && t.k === 'prim') base = 'n';
     let n = base;
     for (let k = 2; used.has(n); k++) n = `${base}${k}`;
@@ -175,30 +176,67 @@ function replaceGroups(state: EditorState, res: CheckResult, ctx: CompleteCtx, h
     }
   }
 
+  const statics = staticItems(ctx, holeId, E);
   const shape = fnShape(E);
   if (shape) {
     const items: CItem[] = [];
     const names = paramNames(shape.params, env);
-    items.push({
-      kind: 'item', label: `${names.length === 1 ? names[0] : `(${names.join(', ')})`} -> …`,
-      detail: show(E), doc: 'A lambda: a little function. Write the parameter name, then an expression using it.',
-      example: names.length === 1 ? `${names[0]} -> ${names[0]}.year() > 2000` : '(a, b) -> a + b',
-      apply: (s) => fill(s, holeId, lambda(names, hole())),
-    });
+    // Java cannot infer an implicit lambda parameter in Comparator.comparing(...).reversed() / .thenComparing(...),
+    // and we cannot know yet whether the comparator will be extended: offer method references only.
+    const receiverPos = !!par &&
+      ((par.t === 'scall' && par.name.startsWith('comparing')) || (par.t === 'call' && par.name === 'thenComparing'));
+    const isSupplier = E.k === 'cls' && E.n === 'Supplier';
+    if (!receiverPos && !isSupplier) {
+      items.push({
+        kind: 'item', label: `${names.length === 1 ? names[0] : `(${names.join(', ')})`} -> …`,
+        detail: show(E), doc: 'A lambda: a little function. Write the parameter name, then an expression using it.',
+        example: names.length === 1 ? `${names[0]} -> ${names[0]}.year() > 2000` : '(a, b) -> a + b',
+        apply: (s) => fill(s, holeId, lambda(names, hole())),
+      });
+    }
     const p = shape.params[0];
-    if (shape.params.length === 1 && p.k === 'cls') {
-      for (const m of membersOf(p, u)) {
-        if (m.arity !== 0 || m.kind !== 'instance' || forbidden(ctx, m)) continue;
-        const r = m.ret(p, [], u);
-        if (!isAny(shape.ret) && !assignable(r, shape.ret)) continue;
+    if (shape.params.length === 1) {
+      const owners: JType[] = p.k === 'cls' ? [p] : isAny(p) ? [...Object.keys(u.records).map((r) => cls(r)), STRING] : [];
+      for (const ot of owners) {
+        for (const m of membersOf(ot, u)) {
+          if (m.arity !== 0 || m.kind !== 'instance' || forbidden(ctx, m)) continue;
+          const r = m.ret(ot, [], u);
+          if (!isAny(shape.ret) && !assignable(r, shape.ret)) continue;
+          items.push({
+            kind: 'item', label: `${(ot as any).n}::${m.name}`, detail: show(r), doc: m.doc,
+            example: `${(ot as any).n}::${m.name} is the same as x -> x.${m.name}()`,
+            apply: (s) => fill(s, holeId, mref((ot as any).n, m.name)),
+          });
+        }
+      }
+    }
+    if (shape.params.length === 2) {
+      for (const sr of STATIC_REFS) {
+        const fits = shape.params.every((q) => isAny(q) || (sr.kind === 'int' ? assignable(q, INT) : isNumeric(q)));
+        if (!fits || (!isAny(shape.ret) && !assignable(sr.ret(shape.params), shape.ret))) continue;
         items.push({
-          kind: 'item', label: `${p.n}::${m.name}`, detail: show(r), doc: m.doc,
-          example: `${p.n}::${m.name} is the same as x -> x.${m.name}()`,
-          apply: (s) => fill(s, holeId, mref(p.n, m.name)),
+          kind: 'item', label: `${sr.owner}::${sr.name}`, detail: show(sr.ret(shape.params)), doc: sr.doc,
+          example: `${sr.owner}::${sr.name} is the same as (a, b) -> ${sr.owner}.${sr.name}(a, b)`,
+          apply: (s) => fill(s, holeId, mref(sr.owner, sr.name)),
         });
       }
     }
-    out.push({ title: 'Functions', items });
+    if (isSupplier && shape.params.length === 0) {
+      for (const k of Object.keys(CTOR_KINDS).filter((x) => x !== 'HashMap')) {
+        items.push({
+          kind: 'item', label: `${k}::new`, detail: 'Map',
+          doc: k === 'TreeMap' ? 'Creates a TreeMap: the keys come out sorted.' : 'Creates a LinkedHashMap: the keys keep their insertion order.',
+          example: `Collectors.groupingBy(f, ${k}::new, downstream)`,
+          apply: (s) => fill(s, holeId, mref(k, 'new')),
+        });
+      }
+    }
+    if (items.length) out.push({ title: 'Functions', items });
+    if (statics.length) out.push({ title: (E as any).n, items: statics });
+    return out;
+  }
+  if (statics.length) {
+    out.push({ title: (E as any).n, items: statics });
     return out;
   }
 
@@ -261,7 +299,28 @@ function replaceGroups(state: EditorState, res: CheckResult, ctx: CompleteCtx, h
   return out;
 }
 
-const forbidden = (ctx: CompleteCtx, m: Member) => (ctx.forbidden ?? []).includes(memberId(m));
+function staticItems(ctx: CompleteCtx, holeId: number, E: JType): ActionItem[] {
+  if (E.k !== 'cls') return [];
+  const out: ActionItem[] = [];
+  for (const m of STATICS) {
+    if (forbidden(ctx, m)) continue;
+    const ats = m.args(E, ctx.u, []);
+    const r = m.ret(E, ats, ctx.u);
+    if (r.k !== 'cls' || r.n !== E.n || !assignable(r, E)) continue;
+    out.push({
+      kind: 'item',
+      label: `${m.owner}.${m.name}(${m.params.join(', ')})`,
+      detail: show(r).replace(/\?/g, 'R'),
+      signature: signature(m, E, ctx.u),
+      doc: m.doc,
+      example: m.example,
+      apply: (s) => fill(s, holeId, scall(m.owner, m.name, m.params.map(() => hole()))),
+    });
+  }
+  return out;
+}
+
+const forbidden = (ctx: CompleteCtx, m: Member) => isForbidden(ctx.forbidden, m);
 
 // ---- append mode ------------------------------------------------------------
 

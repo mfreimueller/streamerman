@@ -170,7 +170,7 @@ export function withFnReturn(t: JType, ret: JType): JType {
   if (!s || s.retIndex === undefined) return t;
   const a = [...t.a];
   while (a.length <= s.retIndex) a.push(ANY);
-  if (a[s.retIndex].k === 'any') a[s.retIndex] = box(ret);
+  if (hasAny(a[s.retIndex])) a[s.retIndex] = box(ret);
   return cls(t.n, ...a);
 }
 

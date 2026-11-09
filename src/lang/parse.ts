@@ -114,17 +114,23 @@ export function parseExpr(src: string, kindOf: KindOf = () => undefined): Node {
           next();
           return lambda([t.v], expr(0));
         }
-        const kind = kindOf(t.v);
+        let owner = t.v;
+        if (owner === 'Map' && isOp(peek(), '.') && peek(1).v === 'Entry') {
+          next();
+          next();
+          owner = 'Map.Entry';
+        }
+        const kind = owner === 'Map.Entry' ? 'class' : kindOf(owner);
         if (kind && isOp(peek(), '::')) {
           next();
-          return mref(t.v, next().v);
+          return mref(owner, next().v);
         }
         if (kind && isOp(peek(), '.')) {
           next();
           const member = next().v;
-          if (isOp(peek(), '(')) return scall(t.v, member, args());
-          if (kind === 'enum') return enumConst(t.v, member);
-          throw new Error(`Unsupported field access ${t.v}.${member}`);
+          if (isOp(peek(), '(')) return scall(owner, member, args());
+          if (kind === 'enum') return enumConst(owner, member);
+          throw new Error(`Unsupported field access ${owner}.${member}`);
         }
         return name(t.v);
       }

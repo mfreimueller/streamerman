@@ -1,5 +1,5 @@
 // Editor state: the program tree, the cursor and an undo stack. All updates are immutable.
-import { find, hole, holesOf, replaceById, type Node, type Program, type Stmt } from '../lang/ast';
+import { find, hole, holesOf, parents, replaceById, type Node, type Program, type Stmt } from '../lang/ast';
 import type { JType } from '../lang/types';
 
 export interface Cursor {
@@ -46,7 +46,19 @@ function cursorAfter(node: Node, ignoreHoles: Set<number> = new Set()): Cursor {
 
 /** Replace the node (usually a hole) by `node`. */
 export function fill(s: EditorState, targetId: number, node: Node): EditorState {
-  return commit(s, replaceById(currentStmt(s).root, targetId, node), cursorAfter(node));
+  const root = replaceById(currentStmt(s).root, targetId, node);
+  let cursor = cursorAfter(node);
+  // A finished method reference, or an argument that is followed by another gap, cannot be continued
+  // in a useful way: go to the next gap of the same call right away (saves a tap).
+  if (cursor.mode === 'append') {
+    const parent = parents(root).get(node.id);
+    if (parent && (parent.t === 'call' || parent.t === 'scall')) {
+      const i = parent.args.indexOf(node);
+      const next = i >= 0 ? parent.args.slice(i + 1).flatMap(holesOf)[0] : undefined;
+      if (next && (node.t === 'mref' || i < parent.args.length - 1)) cursor = { nodeId: next.id, mode: 'replace' };
+    }
+  }
+  return commit(s, root, cursor);
 }
 
 /** Put a new node around the target (e.g. `target.name(...)`, `target > ...`). */

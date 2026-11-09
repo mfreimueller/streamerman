@@ -3,7 +3,7 @@ import type { Node } from './ast';
 import type { NodeInfo } from './check';
 import { isNumeric, show, type JType } from './types';
 import type { Universe } from './universe';
-import { JavaException, toJavaString } from '../engine/values';
+import { JMap, JavaException, toJavaString } from '../engine/values';
 
 export type Values = Map<string, unknown>;
 
@@ -28,6 +28,11 @@ export function evaluate(root: Node, values: Values, info: Map<number, NodeInfo>
         };
       case 'mref': {
         const ni = info.get(n.id)!;
+        if (ni.ctor) {
+          const kind = ni.ctor;
+          return () => new JMap(kind);
+        }
+        if (ni.staticFn) return ni.staticFn;
         const m = ni.member!;
         return (x: unknown) => {
           if (x === null || x === undefined) throw new JavaException('NullPointerException');
@@ -43,8 +48,11 @@ export function evaluate(root: Node, values: Values, info: Map<number, NodeInfo>
         const args = n.args.map((a) => ev(a, env));
         return ni.member!.eval(recv, args, { u }, { recv: ni.recv!, args: ni.argTypes ?? [] });
       }
-      case 'scall':
-        throw new Error(`Unsupported static call ${n.owner}.${n.name}`);
+      case 'scall': {
+        const ni = info.get(n.id)!;
+        const args = n.args.map((a) => ev(a, env));
+        return ni.member!.eval(undefined, args, { u }, { recv: ni.recv!, args: ni.argTypes ?? [] });
+      }
       case 'un': {
         const v = ev(n.operand, env);
         if (n.op === '!') return !v;

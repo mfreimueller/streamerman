@@ -2,10 +2,12 @@
 import type { BinOp, Node, Stmt } from './ast';
 import { holesOf } from './ast';
 import {
-  ANY, BOOLEAN, DOUBLE, INT, LONG, STRING, assignable, cls, fnShape, isAny, isBoolean,
+  ANY, BOOLEAN, DOUBLE, FUNCTIONAL, INT, LONG, STRING, assignable, cls, fnShape, isAny, isBoolean,
   isNumeric, promote, show, unbox, withFnReturn, type JType,
 } from './types';
 import { findMember, type Member } from './members';
+import { CTOR_KINDS, findStatic, findStaticRef } from './statics';
+import type { CollKind } from '../engine/values';
 import type { Universe } from './universe';
 
 export type Env = Map<string, JType>;
@@ -21,6 +23,9 @@ export interface NodeInfo {
   member?: Member;
   recv?: JType;
   argTypes?: JType[];
+  /** Static method reference (Integer::sum) or constructor reference (TreeMap::new). */
+  staticFn?: (a: number, b: number) => number;
+  ctor?: CollKind;
 }
 
 export interface CheckResult {
@@ -98,12 +103,45 @@ export function typecheck(stmt: Stmt, env: Env, u: Universe): CheckResult {
         return withFnReturn(expected, visit(n.body, e2, bodyExpected));
       }
       case 'mref': {
+        if (n.name === 'new') {
+          const shape = fnShape(expected);
+          if (!CTOR_KINDS[n.owner]) {
+            ni.error = `Constructor reference ${n.owner}::new is not supported`;
+            return ANY;
+          }
+          if (!shape || shape.params.length !== 0) {
+            ni.error = isAny(expected) ? 'A constructor reference is not allowed here' : `Expected ${show(expected)} but got a constructor reference`;
+            return ANY;
+          }
+          ni.ctor = CTOR_KINDS[n.owner];
+          return fnResult(ni, expected, cls('Map', ANY, ANY), ni);
+        }
         const shape = fnShape(expected);
+        const sr = findStaticRef(n.owner, n.name);
+        if (sr) {
+          if (!shape || shape.params.length !== 2) {
+            ni.error = isAny(expected) ? 'A method reference is not allowed here' : `Expected ${show(expected)} but got ${n.owner}::${n.name}`;
+            return ANY;
+          }
+          const bad = shape.params.find((p) => !isAny(p) && !(sr.kind === 'int' ? assignable(p, INT) : isNumeric(p)));
+          if (bad) {
+            ni.error = `${n.owner}::${n.name} does not fit ${show(bad)}`;
+            return expected;
+          }
+          ni.staticFn = sr.fn;
+          return fnResult(ni, expected, sr.ret(shape.params), ni);
+        }
         if (!shape || shape.params.length !== 1) {
           ni.error = isAny(expected) ? 'A method reference is not allowed here' : `Expected ${show(expected)} but got a method reference`;
           return ANY;
         }
-        const p = shape.params[0];
+        let exp = expected;
+        let p = shape.params[0];
+        if (isAny(p) && (u.records[n.owner] || n.owner === 'String') && exp.k === 'cls' && FUNCTIONAL[exp.n]) {
+          // the owner tells us the parameter type, as in Comparator.comparing(Movie::title)
+          p = cls(n.owner);
+          exp = cls(exp.n, p, ...exp.a.slice(1));
+        }
         if (isAny(p)) return expected;
         if (p.k !== 'cls' || p.n !== n.owner) {
           ni.error = `${n.owner}::${n.name} does not fit ${show(p)}`;
@@ -116,10 +154,11 @@ export function typecheck(stmt: Stmt, env: Env, u: Universe): CheckResult {
         }
         ni.member = m;
         ni.recv = p;
-        return fnResult(ni, expected, m.ret(p, [], u), ni);
+        return fnResult(ni, exp, m.ret(p, [], u), ni);
       }
       case 'call': {
-        const rt = visit(n.target, e, ANY);
+        const hint = (n.name === 'reversed' || n.name === 'thenComparing') && expected.k === 'cls' && expected.n === 'Comparator' ? expected : ANY;
+        const rt = visit(n.target, e, hint);
         const m = n.target.t === 'hole' || isAny(rt) ? undefined : findMember(rt, n.name, n.args.length, u);
         if (!m) {
           if (!isAny(rt)) {
@@ -132,15 +171,24 @@ export function typecheck(stmt: Stmt, env: Env, u: Universe): CheckResult {
         }
         ni.member = m;
         ni.recv = rt;
-        const exp = m.args(rt, u);
-        const ats = n.args.map((a, i) => visit(a, e, exp[i] ?? ANY));
+        const ats: JType[] = [];
+        n.args.forEach((a, i) => ats.push(visit(a, e, m.args(rt, u, ats)[i] ?? ANY)));
         ni.argTypes = ats;
         return m.ret(rt, ats, u);
       }
       case 'scall': {
-        n.args.forEach((a) => visit(a, e, ANY));
-        ni.error = `Cannot find method ${n.owner}.${compactCall(n.name, n.args.length)}`;
-        return ANY;
+        const m = findStatic(n.owner, n.name, n.args.length);
+        if (!m) {
+          n.args.forEach((a) => visit(a, e, ANY));
+          ni.error = `Cannot find method ${n.owner}.${compactCall(n.name, n.args.length)}`;
+          return ANY;
+        }
+        ni.member = m;
+        ni.recv = expected;
+        const ats: JType[] = [];
+        n.args.forEach((a, i) => ats.push(visit(a, e, m.args(expected, u, ats)[i] ?? ANY)));
+        ni.argTypes = ats;
+        return m.ret(expected, ats, u);
       }
       case 'un': {
         if (n.op === '!') {

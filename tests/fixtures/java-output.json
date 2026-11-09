@@ -1,0 +1,210 @@
+[
+  {
+    "expr": "words.stream().collect(Collectors.toMap(w -> w, String::length))",
+    "java": "{reduce=6, all=3, count=5, distinct=8, skip=4, none=4, any=3, peek=4, filter=6, sorted=6, stream=6, flat=4, find=4, of=2, limit=5, map=3, collect=7}"
+  },
+  {
+    "expr": "words.stream().collect(Collectors.groupingBy(String::length))",
+    "java": "{2=[of], 3=[map, any, all], 4=[flat, peek, skip, find, none], 5=[limit, count], 6=[stream, filter, sorted, reduce], 7=[collect], 8=[distinct]}"
+  },
+  {
+    "expr": "words.stream().collect(Collectors.groupingBy(String::length, Collectors.counting()))",
+    "java": "{2=1, 3=3, 4=5, 5=2, 6=4, 7=1, 8=1}"
+  },
+  {
+    "expr": "words.stream().collect(Collectors.toSet())",
+    "java": "[reduce, all, count, distinct, skip, none, any, peek, filter, sorted, stream, flat, find, of, limit, map, collect]"
+  },
+  {
+    "expr": "words.stream().collect(Collectors.toMap(String::length, w -> w))",
+    "java": "IllegalStateException: Duplicate key 6 (attempted merging values stream and filter)"
+  },
+  {
+    "expr": "words.stream().collect(Collectors.toMap(String::length, w -> w, (a, b) -> a + \"|\" + b))",
+    "java": "{2=of, 3=map|any|all, 4=flat|peek|skip|find|none, 5=limit|count, 6=stream|filter|sorted|reduce, 7=collect, 8=distinct}"
+  },
+  {
+    "expr": "nums.stream().collect(Collectors.toSet())",
+    "java": "[16, 1, 17, 33, 65, 3, 20, 100, 5, 7, 8, 12]"
+  },
+  {
+    "expr": "nums.stream().collect(Collectors.groupingBy(n -> n % 5, Collectors.counting()))",
+    "java": "{0=4, 1=2, 2=3, 3=5}"
+  },
+  {
+    "expr": "nums.stream().collect(Collectors.partitioningBy(n -> n > 10))",
+    "java": "{false=[5, 3, 8, 3, 7, 1, 8], true=[12, 20, 17, 33, 16, 65, 100]}"
+  },
+  {
+    "expr": "noInts.stream().mapToInt(n -> n).average()",
+    "java": "OptionalDouble.empty"
+  },
+  {
+    "expr": "nums.stream().mapToInt(n -> n).average()",
+    "java": "OptionalDouble[21.285714285714285]"
+  },
+  {
+    "expr": "nums.stream().mapToInt(n -> n).max()",
+    "java": "OptionalInt[100]"
+  },
+  {
+    "expr": "noInts.stream().mapToInt(n -> n).max()",
+    "java": "OptionalInt.empty"
+  },
+  {
+    "expr": "nums.stream().mapToInt(n -> n).sum()",
+    "java": "298"
+  },
+  {
+    "expr": "nums.stream().collect(Collectors.summingInt(n -> n))",
+    "java": "298"
+  },
+  {
+    "expr": "nums.stream().reduce(0, Integer::sum)",
+    "java": "298"
+  },
+  {
+    "expr": "nums.stream().reduce(Integer::max)",
+    "java": "Optional[100]"
+  },
+  {
+    "expr": "noInts.stream().reduce(Integer::max)",
+    "java": "Optional.empty"
+  },
+  {
+    "expr": "ds",
+    "java": "[0.1, 0.2, 0.3, 7.0, 1.0E7, 0.001, 1.0E-4, 1.23456789125E8, 2.5, 0.3333333333333333]"
+  },
+  {
+    "expr": "ds.stream().mapToDouble(d -> d).sum()",
+    "java": "1.3345679955943333E8"
+  },
+  {
+    "expr": "ds.stream().mapToDouble(d -> d).average()",
+    "java": "OptionalDouble[1.3345679955943333E7]"
+  },
+  {
+    "expr": "ds.stream().collect(Collectors.averagingDouble(d -> d))",
+    "java": "1.3345679955943333E7"
+  },
+  {
+    "expr": "ds.stream().collect(Collectors.summingDouble(d -> d))",
+    "java": "1.3345679955943333E8"
+  },
+  {
+    "expr": "ds.stream().mapToDouble(d -> d).max()",
+    "java": "OptionalDouble[1.23456789125E8]"
+  },
+  {
+    "expr": "words.stream().collect(Collectors.joining(\", \", \"[\", \"]\"))",
+    "java": "[stream, map, filter, limit, of, sorted, distinct, collect, reduce, flat, count, peek, skip, find, any, none, all]"
+  },
+  {
+    "expr": "noWords.stream().collect(Collectors.joining(\", \", \"[\", \"]\"))",
+    "java": "[]"
+  },
+  {
+    "expr": "words.stream().limit(3).collect(Collectors.joining())",
+    "java": "streammapfilter"
+  },
+  {
+    "expr": "plays.stream().collect(Collectors.partitioningBy(Play::isSkipped, Collectors.counting()))",
+    "java": "{false=9, true=3}"
+  },
+  {
+    "expr": "plays.stream().collect(Collectors.groupingBy(Play::artist, Collectors.summingInt(Play::secondsPlayed)))",
+    "java": "{The Daemons=324, Lambda Lovers=572, Garbage Collectors=379, The Null Pointers=558, Stack Overflow=437}"
+  },
+  {
+    "expr": "plays.stream().collect(Collectors.groupingBy(Play::artist, TreeMap::new, Collectors.mapping(Play::title, Collectors.toSet())))",
+    "java": "{Garbage Collectors=[Heap Space, Mark and Sweep], Lambda Lovers=[Optional.empty(), Pure Function], Stack Overflow=[Infinite Loop], The Daemons=[Take Five Threads], The Null Pointers=[Segfault Serenade, Blue Screen Blues]}"
+  },
+  {
+    "expr": "plays.stream().collect(Collectors.toMap(Play::artist, Play::secondsPlayed, Integer::sum))",
+    "java": "{The Daemons=324, Lambda Lovers=572, Garbage Collectors=379, The Null Pointers=558, Stack Overflow=437}"
+  },
+  {
+    "expr": "plays.stream().collect(Collectors.toMap(Play::artist, Play::secondsPlayed, Integer::sum, TreeMap::new))",
+    "java": "{Garbage Collectors=379, Lambda Lovers=572, Stack Overflow=437, The Daemons=324, The Null Pointers=558}"
+  },
+  {
+    "expr": "plays.stream().collect(Collectors.toMap(Play::artist, Play::secondsPlayed))",
+    "java": "IllegalStateException: Duplicate key The Null Pointers (attempted merging values 245 and 12)"
+  },
+  {
+    "expr": "plays.stream().collect(Collectors.toMap(Play::artist, Play::secondsPlayed, Integer::sum)).keySet()",
+    "java": "[The Daemons, Lambda Lovers, Garbage Collectors, The Null Pointers, Stack Overflow]"
+  },
+  {
+    "expr": "plays.stream().collect(Collectors.toMap(Play::artist, Play::secondsPlayed, Integer::sum)).values()",
+    "java": "[324, 572, 379, 558, 437]"
+  },
+  {
+    "expr": "plays.stream().collect(Collectors.toMap(Play::artist, Play::secondsPlayed, Integer::sum)).getOrDefault(\"Nobody\", 0)",
+    "java": "0"
+  },
+  {
+    "expr": "plays.stream().collect(Collectors.toMap(Play::artist, Play::secondsPlayed, Integer::sum)).get(\"Nobody\")",
+    "java": "null"
+  },
+  {
+    "expr": "plays.stream().collect(Collectors.groupingBy(Play::genre, Collectors.counting())).get(Genre.ROCK)",
+    "java": "3"
+  },
+  {
+    "expr": "plays.stream().collect(Collectors.groupingBy(Play::artist, Collectors.averagingInt(Play::secondsPlayed)))",
+    "java": "{The Daemons=324.0, Lambda Lovers=190.66666666666666, Garbage Collectors=126.33333333333333, The Null Pointers=186.0, Stack Overflow=218.5}"
+  },
+  {
+    "expr": "plays.stream().collect(Collectors.groupingBy(p -> p.title().length(), Collectors.counting()))",
+    "java": "{16=2, 17=4, 10=1, 13=3, 14=2}"
+  },
+  {
+    "expr": "plays.stream().sorted(Comparator.comparing(Play::artist).reversed().thenComparing(Play::title)).map(Play::title).toList()",
+    "java": "[Blue Screen Blues, Segfault Serenade, Segfault Serenade, Take Five Threads, Infinite Loop, Infinite Loop, Optional.empty(), Optional.empty(), Pure Function, Heap Space, Mark and Sweep, Mark and Sweep]"
+  },
+  {
+    "expr": "plays.stream().sorted(Comparator.comparingInt(Play::secondsPlayed).reversed()).map(Play::secondsPlayed).toList()",
+    "java": "[412, 324, 301, 245, 198, 198, 187, 187, 176, 25, 12, 5]"
+  },
+  {
+    "expr": "plays.stream().map(Play::secondsPlayed).sorted().limit(3).toList()",
+    "java": "[5, 12, 25]"
+  },
+  {
+    "expr": "plays.stream().max(Comparator.comparingInt(Play::secondsPlayed))",
+    "java": "Optional[Play[title=Infinite Loop, artist=Stack Overflow, genre=ELECTRONIC, secondsPlayed=412]]"
+  },
+  {
+    "expr": "plays.stream().min(Comparator.comparing(Play::title))",
+    "java": "Optional[Play[title=Blue Screen Blues, artist=The Null Pointers, genre=ROCK, secondsPlayed=301]]"
+  },
+  {
+    "expr": "plays.stream().reduce(BinaryOperator.maxBy(Comparator.comparingInt(Play::secondsPlayed)))",
+    "java": "Optional[Play[title=Infinite Loop, artist=Stack Overflow, genre=ELECTRONIC, secondsPlayed=412]]"
+  },
+  {
+    "expr": "plays.stream().map(Play::genre).distinct().toList()",
+    "java": "[ROCK, POP, ELECTRONIC, HIP_HOP, JAZZ]"
+  },
+  {
+    "expr": "noWords.stream().findFirst()",
+    "java": "Optional.empty"
+  },
+  {
+    "expr": "noWords.stream().findFirst().orElseThrow()",
+    "java": "NoSuchElementException: No value present"
+  },
+  {
+    "expr": "words.stream().findFirst().map(String::length)",
+    "java": "Optional[6]"
+  },
+  {
+    "expr": "words.stream().filter(w -> w.length() > 100).findFirst().orElse(\"none\")",
+    "java": "none"
+  },
+  {
+    "expr": "words.stream().skip(5).anyMatch(w -> w.startsWith(\"f\"))",
+    "java": "true"
+  }
+]

@@ -43,6 +43,7 @@ export class Universe {
 
 export const LIBRARY_CLASSES = [
   'Comparator', 'Collectors', 'Stream', 'Map', 'Integer', 'Math', 'Function', 'String', 'List', 'Optional',
+  'BinaryOperator', 'TreeMap', 'LinkedHashMap', 'HashMap', 'Set', 'IntStream', 'DoubleStream',
 ];
 
 export const makeUniverse = (records: RecordDef[], enums: EnumDef[]) => new Universe(records, enums);

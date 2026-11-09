@@ -1,15 +1,10 @@
 // Lazy Java-like stream over JS generators. Single use.
-import { JavaException, JOptional, isEnum, structKey } from './values';
+import { JavaException, JOptional, naturalCompare, structKey } from './values';
+import type { Collector } from './collectors';
 
 const REUSE = 'stream has already been operated upon or closed';
 
-export function naturalCompare(a: unknown, b: unknown): number {
-  if (typeof a === 'number' && typeof b === 'number') return a < b ? -1 : a > b ? 1 : 0;
-  if (typeof a === 'string' && typeof b === 'string') return a < b ? -1 : a > b ? 1 : 0;
-  if (typeof a === 'boolean' && typeof b === 'boolean') return Number(a) - Number(b);
-  if (isEnum(a) && isEnum(b)) return a.ordinal - b.ordinal;
-  throw new JavaException('ClassCastException', 'class cannot be cast to class java.lang.Comparable');
-}
+export { naturalCompare };
 
 export class JStream<T = any> {
   private used = false;
@@ -127,5 +122,56 @@ export class JStream<T = any> {
       return JOptional.of(x);
     }
     return JOptional.empty();
+  }
+
+  flatMap<R>(f: (x: T) => JStream<R>): JStream<R> {
+    const s = this.open();
+    return new JStream(
+      (function* () {
+        for (const x of s) {
+          const inner = f(x);
+          if (inner) yield* inner;
+        }
+      })(),
+    );
+  }
+
+  [Symbol.iterator](): Iterator<T> {
+    return this.open()[Symbol.iterator]();
+  }
+
+  toArray(): T[] {
+    return [...this.open()];
+  }
+
+  reduce(identity: T, op: (a: T, b: T) => T): T {
+    let acc = identity;
+    for (const x of this.open()) acc = op(acc, x);
+    return acc;
+  }
+
+  reduce1(op: (a: T, b: T) => T): JOptional {
+    let acc: T | undefined;
+    let any = false;
+    for (const x of this.open()) {
+      acc = any ? op(acc as T, x) : x;
+      any = true;
+    }
+    return any ? JOptional.of(acc) : JOptional.empty();
+  }
+
+  /** Stream.max(cmp): the first of equal maxima wins. */
+  max(cmp: (a: T, b: T) => number): JOptional {
+    return this.reduce1((a, b) => (cmp(a, b) >= 0 ? a : b));
+  }
+
+  min(cmp: (a: T, b: T) => number): JOptional {
+    return this.reduce1((a, b) => (cmp(a, b) <= 0 ? a : b));
+  }
+
+  collect<A, R>(c: Collector<A, R>): R {
+    const acc = c.sup();
+    for (const x of this.open()) c.acc(acc, x);
+    return c.fin(acc);
   }
 }
