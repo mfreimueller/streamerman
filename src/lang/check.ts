@@ -15,6 +15,8 @@ export interface NodeInfo {
   expected: JType;
   env: Env;
   error?: string;
+  /** The error is only an assignability mismatch with the expected type (the node itself is fine). */
+  mismatch?: boolean;
   /** Resolved member of a call / method reference. */
   member?: Member;
   recv?: JType;
@@ -44,6 +46,7 @@ export function typecheck(stmt: Stmt, env: Env, u: Universe): CheckResult {
     ni.type = infer(n, e, expected, ni);
     if (!ni.error && n.t !== 'hole' && n.t !== 'lambda' && n.t !== 'mref' && !assignable(ni.type, expected)) {
       ni.error = `Expected ${show(expected)} but got ${show(ni.type)}`;
+      ni.mismatch = true;
     }
     return ni.type;
   };
