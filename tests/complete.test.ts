@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { complete, type CItem, type CompleteCtx, type Completion } from '../src/builder/complete';
 import { currentStmt, initState, setCursor, undo, unwrapCall, type EditorState } from '../src/builder/edit';
+import { rootHint } from '../src/builder/hint';
 import { typecheck } from '../src/lang/check';
 import { toJavaFlat } from '../src/lang/print';
 import { ANY, BOOLEAN, LONG, STRING, cls } from '../src/lang/types';
@@ -81,6 +82,7 @@ describe('completions', () => {
     expect(ownLabels).toEqual(expect.arrayContaining(['+', '-', '*', '/', '%']));
     expect(ownLabels).not.toContain('>');
     expect(ownLabels).not.toContain('&&');
+    expect(ownLabels).not.toContain('||');
     const cmp = c.comp().groups.find((g) => g.title.startsWith('on m.year() > year'))!;
     expect(cmp.items.map((i) => i.label)).toEqual(expect.arrayContaining(['&&', '||']));
     expect(cmp.items.map((i) => i.label)).not.toContain('+');
@@ -149,5 +151,24 @@ describe('completions', () => {
       expect(int.validate('1.5')).not.toBeNull();
       expect(int.validate('')).not.toBeNull();
     }
+  });
+
+  it('gives a neutral hint when only the result type is still wrong', () => {
+    const b = new B();
+    b.pick('movies').pick('stream()');
+    expect(rootHint(currentStmt(b.s), b.res(), U)).toBe('Result is still Stream<Movie>. Expected List<String>.');
+    const w = new B();
+    w.pick('words').pick('stream()');
+    expect(rootHint(currentStmt(w.s), w.res(), U)).toBe(
+      'Result is still Stream<String>. Expected List<String>; finish with an operation such as toList().',
+    );
+    b.pick('count()');
+    expect(rootHint(currentStmt(b.s), b.res(), U)).toContain('Result is still long');
+    const c = new B();
+    c.pick('movies').pick('stream()').pick('filter(predicate)');
+    expect(rootHint(currentStmt(c.s), c.res(), U)).toBeNull(); // has a gap
+    const d = new B(BOOLEAN);
+    d.pick('year').pick('>').pick('year');
+    expect(rootHint(currentStmt(d.s), d.res(), U)).toBeNull();
   });
 });

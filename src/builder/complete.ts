@@ -1,6 +1,6 @@
 // Completion catalogue: what may be put at the cursor.
 import {
-  bin, call, enumConst, find, hole, lambda, lit, mref, name, parents, replaceById, un,
+  bin, call, children, enumConst, find, hole, lambda, lit, mref, name, parents, replaceById, un,
   type BinOp, type LitType, type Node,
 } from '../lang/ast';
 import { typecheck, type CheckResult, type Env } from '../lang/check';
@@ -340,7 +340,14 @@ function tryOp(
   const r = typecheck({ ...stmt, root }, env, u);
   const mine = r.info.get(wrapper.id);
   if (!mine || (mine.error && !mine.mismatch)) return null;
-  // no ancestor may get a new error
+  // neither the operands (target subtree, placeholder) nor any ancestor may get a new error
+  const fresh = (id: number) => !!r.info.get(id)?.error && !base.info.get(id)?.error;
+  const stack: Node[] = [...children(wrapper)];
+  while (stack.length) {
+    const n = stack.pop()!;
+    if (fresh(n.id)) return null;
+    stack.push(...children(n));
+  }
   const par = parents(root);
   for (let p = par.get(wrapper.id); p; p = par.get(p.id)) {
     if (r.info.get(p.id)?.error && !base.info.get(p.id)?.error) return null;

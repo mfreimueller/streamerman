@@ -4,6 +4,7 @@
   import { bindingsOf, signatureOf } from '../content/types';
   import { complete, type CItem } from '../builder/complete';
   import { clearAll, currentStmt, initState, setCursor, undo, type EditorState } from '../builder/edit';
+  import { rootHint } from '../builder/hint';
   import { typecheck } from '../lang/check';
   import { parseExpr } from '../lang/parse';
   import { stmtTokens, toJava } from '../lang/print';
@@ -21,6 +22,7 @@
   const fresh = () => initState([{ type: task.returnType }]);
   let st = $state.raw<EditorState>(fresh());
   let report = $state.raw<RunReport | null>(null);
+  let collapsed = $state(false);
   let chip = $state<string | null>(null);
   let reportEl = $state<HTMLElement>();
 
@@ -31,6 +33,7 @@
     complete(st, res, { u: unit.universe, forbidden: task.forbidden, stringSuggestions: unit.suggestions }),
   );
   const problems = $derived(describeProblems(res));
+  const hint = $derived(rootHint(stmt, res, unit.universe, task.forbidden));
   const tokens = $derived(
     stmtTokens(stmt, {
       caretAfter: st.cursor.mode === 'append' && !st.cursor.selected ? st.cursor.nodeId : undefined,
@@ -42,6 +45,7 @@
       res.errors
         .filter((e) => {
           if (!res.info.get(e.id)?.mismatch) return true;
+          if (e.id === stmt.root.id) return false;
           return !res.incomplete && !(st.cursor.nodeId === e.id && st.cursor.mode === 'append' && !st.cursor.selected);
         })
         .map((e) => [e.id, e.message]),
@@ -73,10 +77,11 @@
     st = item.kind === 'literal' ? item.apply(st, value ?? '') : item.apply(st);
     report = null;
   }
-  const select = (id: number) => (st = setCursor(st, id, true));
+  const select = (id: number) => ((st = setCursor(st, id, true)), (collapsed = false));
 
   async function run() {
     report = runTask(unit, task, st.program);
+    collapsed = true;
     if (report.allPassed) markSolved(unit.id, task.id);
     await tick();
     reportEl?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -122,7 +127,9 @@
 
     <CodeView {tokens} cursor={st.cursor} errors={errorMap} onselect={select} />
 
-    {#if problems.length}
+    {#if hint}
+      <p class="why hint">{hint}</p>
+    {:else if problems.length}
       <p class="why">{problems.join(' · ')}</p>
     {:else}
       <p class="why okmsg">Looks complete. Press Run.</p>
@@ -136,15 +143,21 @@
   </div>
 
   <div class="actions">
-    <button type="button" class="btn" onclick={() => ((st = undo(st)), (report = null))} disabled={!st.history.length}>Undo</button>
-    <button type="button" class="btn" onclick={() => ((st = clearAll(st)), (report = null))} disabled={!st.history.length}>Clear all</button>
+    <button type="button" class="btn" onclick={() => ((st = undo(st)), (report = null), (collapsed = false))} disabled={!st.history.length}>Undo</button>
+    <button type="button" class="btn" onclick={() => ((st = clearAll(st)), (report = null), (collapsed = false))} disabled={!st.history.length}>Clear all</button>
     <span class="spacer"></span>
     <button type="button" class="btn primary" onclick={run} disabled={problems.length > 0} title={problems.join(' · ')}>▶ Run</button>
   </div>
 
+  {#if collapsed}
+    <button type="button" class="slim" onclick={() => (collapsed = false)}>
+      <span>Edit code ▴</span><span class="slimtitle code">{comp.title}</span>
+    </button>
+  {:else}
   {#key st.cursor.nodeId + ':' + st.history.length + ':' + (st.cursor.selected ? 's' : '')}
     <CompletionPanel {comp} onapply={apply} />
   {/key}
+  {/if}
 </div>
 
 <style>
@@ -165,6 +178,9 @@
   .chipinfo { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; margin: 4px 0; font-size: 0.9rem; }
   .def { display: block; font-size: 12.5px; margin: 4px 0; overflow-wrap: anywhere; }
   .why { margin: 4px 2px; font-size: 0.85rem; color: var(--err); }
+  .why.hint { color: var(--muted); }
+  .slim { display: flex; gap: 10px; align-items: center; min-height: 48px; padding: 0 12px; border: 0; border-top: 1px solid var(--border); background: var(--card); cursor: pointer; text-align: left; }
+  .slimtitle { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
   .why.okmsg { color: var(--ok); }
   .actions { display: flex; gap: 8px; padding: 6px 12px; background: var(--card); border-top: 1px solid var(--border); }
 </style>
