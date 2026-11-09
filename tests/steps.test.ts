@@ -9,11 +9,8 @@ import { toJava } from '../src/lang/print';
 import { STRING, cls, show } from '../src/lang/types';
 import { runTask, taskEnv } from '../src/run';
 import { B } from './builder-helper';
-import { universe } from '../src/content/space';
-import { INT } from '../src/lang/types';
 
 const movies = units.find((u) => u.id === 'movies')!;
-const space = units.find((u) => u.id === 'space')!;
 
 describe('multi-step programs', () => {
   const task = movies.tasks.find((t) => t.id === 'titlesOfMostFrequentDirector')!;
@@ -83,20 +80,12 @@ describe('multi-step programs', () => {
   });
 });
 
-describe('Space Mission', () => {
-  const task = space.tasks[0];
-  it('has three steps and the result type is given', () => {
-    expect(task.steps?.map((s) => s.name)).toEqual(['launched', 'colleagues', undefined]);
-    expect(universe.records.Connection.fields.map((f) => f.name)).toEqual(['name', 'colleagues']);
-  });
-  it('offers new Connection(...) where it is allowed', () => {
-    const b = new B(cls('List', cls('Connection')), { u: universe, constructors: ['Connection'] }, new Map([['n', INT]]), universe);
-    b.pick('n');
-    // a fresh hole expecting Connection offers the constructor
-    const c = new B(cls('Connection'), { u: universe, constructors: ['Connection'] }, new Map(), universe);
-    expect(c.labels()).toContain('new Connection(name, colleagues)');
-    const d = new B(cls('Connection'), { u: universe }, new Map(), universe);
-    expect(d.labels()).not.toContain('new Connection(name, colleagues)');
+describe('record construction', () => {
+  it('offers new Movie(...) only where the task allows it', () => {
+    const t = new B(cls('Movie'), { u: movies.universe, constructors: ['Movie'] }, new Map(), movies.universe);
+    expect(t.labels().some((l) => l.startsWith('new Movie('))).toBe(true);
+    const f = new B(cls('Movie'), { u: movies.universe }, new Map(), movies.universe);
+    expect(f.labels().some((l) => l.startsWith('new Movie('))).toBe(false);
   });
 });
 

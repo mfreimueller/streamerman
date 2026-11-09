@@ -226,25 +226,5 @@
   {
     "expr": "plays.stream().filter(p -> !p.isSkipped()).collect(Collectors.groupingBy(Play::artist, TreeMap::new, Collectors.counting())).entrySet().stream().max(Map.Entry.comparingByValue()).map(Map.Entry::getKey)",
     "java": "Optional[Lambda Lovers]"
-  },
-  {
-    "unit": "space",
-    "expr": "launched.stream().map(Mission::code).toList()",
-    "java": "[JUPI, SUNS, ANDR, MOON, EURO]"
-  },
-  {
-    "unit": "space",
-    "expr": "colleagues",
-    "java": "{Story Teller={Buzz Lightyear=[JUPI], Cy Nara=[EURO], Dave Bowman=[EURO], Neil Down=[JUPI, EURO]}, Frank Enstein={Buzz Lightyear=[SUNS], Cy Nara=[SUNS]}, Buzz Lightyear={Cy Nara=[SUNS], Frank Enstein=[SUNS], Neil Down=[JUPI, MOON], Story Teller=[JUPI]}, Dave Bowman={Cy Nara=[EURO], Neil Down=[EURO], Story Teller=[EURO]}, Neil Down={Buzz Lightyear=[JUPI, MOON], Cy Nara=[EURO], Dave Bowman=[EURO], Story Teller=[JUPI, EURO]}, Cy Nara={Buzz Lightyear=[SUNS], Dave Bowman=[EURO], Frank Enstein=[SUNS], Neil Down=[EURO], Story Teller=[EURO]}}"
-  },
-  {
-    "unit": "space",
-    "expr": "colleagues.entrySet().stream().map(e -> new Connection(e.getKey(), e.getValue())).sorted(Comparator.comparingInt((Connection c) -> c.colleagues().size()).reversed().thenComparing(Connection::name)).limit(n).toList()",
-    "java": "[Connection[name=Cy Nara, colleagues={Buzz Lightyear=[SUNS], Dave Bowman=[EURO], Frank Enstein=[SUNS], Neil Down=[EURO], Story Teller=[EURO]}], Connection[name=Buzz Lightyear, colleagues={Cy Nara=[SUNS], Frank Enstein=[SUNS], Neil Down=[JUPI, MOON], Story Teller=[JUPI]}], Connection[name=Neil Down, colleagues={Buzz Lightyear=[JUPI, MOON], Cy Nara=[EURO], Dave Bowman=[EURO], Story Teller=[JUPI, EURO]}]]"
-  },
-  {
-    "unit": "space",
-    "expr": "colleagues.entrySet().stream().map(e -> new Connection(e.getKey(), e.getValue())).sorted(Comparator.comparingInt((Connection c) -> c.colleagues().size()).reversed().thenComparing(Connection::name)).limit(100).map(Connection::name).toList()",
-    "java": "[Cy Nara, Buzz Lightyear, Neil Down, Story Teller, Dave Bowman, Frank Enstein]"
   }
 ]

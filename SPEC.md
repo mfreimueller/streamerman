@@ -20,7 +20,6 @@ in a reasonable time, and the code they see is the code they would write in Inte
 - Stream tasks from:
   - **02 Movie Archive** (`MovieService` methods)
   - **05 Year in Music** (`ListeningStatsService`, all 8 methods)
-  - **03a Space Mission** (stream logic of `findBestConnectedAstronauts`, as guided steps)
 - **Operation drills:** short single-concept tasks on simple data (numbers, words, small records).
 - Practice only. No exam mode, no timer.
 
@@ -32,6 +31,10 @@ in a reasonable time, and the code they see is the code they would write in Inte
   genre input.
 - Free typing of code, a general Java parser.
 - Units 1001/1002 (real exams), coin kata, concept quizzes, predict-the-output, loop→stream.
+- **03a Space Mission** was planned and then dropped (decision after the multi-step builder was built;
+  the three-step solution took about 85 taps). Multi-step tasks remain, used by the two-step tasks
+  of Movie Archive and Year in Music.
+- The ternary operator `?:` (no node for it; `BinaryOperator.maxBy` covers `longestPlay`).
 
 ## 2. Decisions
 
@@ -49,13 +52,13 @@ in a reasonable time, and the code they see is the code they would write in Inte
 | Rules like "use reduce" | Enforced: forbidden operations are not offered |
 | Multi-step tasks | Guided named steps; later steps can use earlier results |
 | Feedback | Expected vs. actual per check, plus a step-through view of the pipeline |
-| Ordering | Everything unlocked; suggested order: drills → 02 → 05 → 03a |
+| Ordering | Everything unlocked; suggested order: drills → 02 → 05 |
 
 ## 3. User experience
 
 ### 3.1 Screens
 
-1. **Home:** list of units (Drills, Movie Archive, Year in Music, Space Mission) with progress
+1. **Home:** list of units (Drills, Movie Archive, Year in Music) with progress
    (`3/8 solved`).
 2. **Unit:** short scenario text, data table (collapsible), list of tasks with checkmarks.
 3. **Task:** the main screen (see below).
@@ -117,8 +120,8 @@ Supported static types:
 
 - Primitives: `int`, `long`, `double`, `boolean`; boxed `Integer`, `Long`, `Double`, `Boolean`
   (auto-boxing between them as Java does).
-- `String`, enums (`Genre`, `Status`, `Role`), domain records (`Movie`, `Play`, `Mission`,
-  `Astronaut`) and drill records.
+- `String`, the enum `Genre` (one per unit), domain records (`Movie`, `Play`) and the drill record
+  `Student`.
 - Generics: `List<T>`, `Set<T>`, `Map<K,V>`, `Map.Entry<K,V>`, `Optional<T>`, `Stream<T>`,
   `IntStream`, `DoubleStream`, `OptionalInt`, `OptionalDouble`, `Comparator<T>`, `Collector<…>`
   (internal), functional types for lambdas (`Predicate<T>`, `Function<T,R>`, `BinaryOperator<T>`, …).
@@ -156,7 +159,7 @@ in its tooltip).
   the result (`m.genres().contains(…)`, `s.length()`, `s.toUpperCase()`, `s.startsWith(…)`,
   `e.getKey()`)
 - comparison `== != < <= > >=`, `.equals(…)` for objects, arithmetic `+ - * / %`,
-  `&& || !`, ternary `?:` (drills), literals, parameters and step variables, enum constants.
+  `&& || !`, literals, parameters and step variables, enum constants.
 - Two-parameter lambdas for `reduce` and `toMap` merge functions (`(a, b) -> a + b`).
 
 **Method references:** `Movie::title`, `String::length`, `Integer::sum`, `Math::max`,
@@ -264,19 +267,10 @@ enum `Genre` – the solution the README hints at):
 `totalSecondsPlayed` and `longestPlay` forbid `sum`/`max`; `secondsPerArtist` forbids
 `groupingBy`; `topArtist` has 2 steps.
 
-**03a Space Mission** (data: the 9 missions; enums `Status`, `Role` given). Result type given:
-`record Connection(String name, Map<String, List<String>> colleagues)` (colleague name → mission
-codes, `TreeMap` for alphabetical order). Guided steps, roughly:
-
-1. `List<Mission> launched`: missions with status `TRAVELING`, `COMPLETED` or `FAILED`.
-2. `Set<String> names`: all astronaut names on launched missions.
-3. A helper task `Map<String, List<String>> colleaguesOf(String name)`: for one astronaut, each
-   colleague with the mission codes, in mission order.
-4. `List<Connection> result`: one `Connection` per name, without empty ones, sorted by
-   colleague count desc then name, limited to `n`.
-
-The exact step split is fixed during implementation, after solving it in the builder myself;
-the README's example result (`findBestConnectedAstronauts(3)`) is a visible check.
+**Tie rules** (documented in the task texts and covered by hidden checks): most frequent director and
+best rated genre: the one that appears first in the data wins; `topArtist`: the alphabetically first
+artist (the first step groups into a `TreeMap`); `longestPlay`: the first of equal plays
+(`BinaryOperator.maxBy`).
 
 ## 7. Project structure
 
@@ -337,4 +331,4 @@ npm run build      # static build into dist/
 
 ## 12. Open questions
 
-- Exact split of the Space Mission steps (decided while implementing, see §6.2).
+- None open. (Space Mission was dropped, see §1.)

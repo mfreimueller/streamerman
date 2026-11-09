@@ -55,21 +55,5 @@
   "plays.stream().map(p -> List.of(p.artist(), p.title())).distinct().limit(3).toList()",
   "plays.stream().collect(Collectors.groupingBy(Play::artist, LinkedHashMap::new, Collectors.counting())).entrySet().stream().max(Map.Entry.comparingByValue()).map(Map.Entry::getKey).orElse(\"\")",
   "plays.stream().filter(p -> !p.isSkipped()).collect(Collectors.groupingBy(Play::artist, TreeMap::new, Collectors.counting()))",
-  "plays.stream().filter(p -> !p.isSkipped()).collect(Collectors.groupingBy(Play::artist, TreeMap::new, Collectors.counting())).entrySet().stream().max(Map.Entry.comparingByValue()).map(Map.Entry::getKey)",
-  {
-    "unit": "space",
-    "expr": "launched.stream().map(Mission::code).toList()"
-  },
-  {
-    "unit": "space",
-    "expr": "colleagues"
-  },
-  {
-    "unit": "space",
-    "expr": "colleagues.entrySet().stream().map(e -> new Connection(e.getKey(), e.getValue())).sorted(Comparator.comparingInt((Connection c) -> c.colleagues().size()).reversed().thenComparing(Connection::name)).limit(n).toList()"
-  },
-  {
-    "unit": "space",
-    "expr": "colleagues.entrySet().stream().map(e -> new Connection(e.getKey(), e.getValue())).sorted(Comparator.comparingInt((Connection c) -> c.colleagues().size()).reversed().thenComparing(Connection::name)).limit(100).map(Connection::name).toList()"
-  }
+  "plays.stream().filter(p -> !p.isSkipped()).collect(Collectors.groupingBy(Play::artist, TreeMap::new, Collectors.counting())).entrySet().stream().max(Map.Entry.comparingByValue()).map(Map.Entry::getKey)"
 ]
